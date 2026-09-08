@@ -1,0 +1,63 @@
+# AetherAI sample team for [Gen 9 Champions] VGC 2026 Reg M-B (Bo3)
+# Showdown export format. "EVs" are Champions Stat Points (max 66 total, 32 per stat).
+# Validated with Showdown's TeamValidator (champions mod). Replace with your own six.
+
+Incineroar @ Sitrus Berry
+Ability: Intimidate
+Level: 50
+EVs: 32 HP / 4 Atk / 12 Def / 18 SpD
+Careful Nature
+- Fake Out
+- Flare Blitz
+- Darkest Lariat
+- Parting Shot
+
+Whimsicott @ Focus Sash
+Ability: Prankster
+Level: 50
+EVs: 32 HP / 4 Def / 30 Spe
+Timid Nature
+- Tailwind
+- Moonblast
+- Encore
+- Protect
+
+Garchomp @ Garchompite
+Ability: Rough Skin
+Level: 50
+EVs: 4 HP / 32 Atk / 30 Spe
+Jolly Nature
+- Earthquake
+- Dragon Claw
+- Rock Slide
+- Protect
+
+Rotom-Wash @ Leftovers
+Ability: Levitate
+Level: 50
+EVs: 32 HP / 16 Def / 18 SpD
+Calm Nature
+- Hydro Pump
+- Thunderbolt
+- Will-O-Wisp
+- Protect
+
+Kingambit @ Black Glasses
+Ability: Defiant
+Level: 50
+EVs: 32 HP / 32 Atk / 2 SpD
+Adamant Nature
+- Kowtow Cleave
+- Sucker Punch
+- Iron Head
+- Protect
+
+Gholdengo @ Choice Scarf
+Ability: Good as Gold
+Level: 50
+EVs: 4 HP / 32 SpA / 30 Spe
+Timid Nature
+- Make It Rain
+- Shadow Ball
+- Thunderbolt
+- Nasty Plot

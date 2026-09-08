@@ -1,0 +1,36 @@
+{
+  "name": "aetherai-showdown-connector",
+  "version": "0.1.0",
+  "private": true,
+  "description": "External AI connector for Pokémon Showdown — [Gen 9 Champions] VGC 2026 Reg M-B (Bo3) with native best-of-three, open team sheets and a provider-independent battle agent interface.",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "bin": {
+    "aether": "dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:all": "vitest run",
+    "play": "tsx src/cli.ts play",
+    "validate-team": "tsx src/cli.ts validate-team",
+    "agent-server": "tsx examples/agent-server.ts",
+    "setup:showdown": "bash scripts/setup-local-showdown.sh",
+    "verify:showdown": "tsx scripts/verify-showdown-facts.ts"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.12",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
