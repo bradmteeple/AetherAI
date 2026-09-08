@@ -5,3 +5,4 @@ runs/
 .env
 *.log
 .vitest-cache/
+.aether/

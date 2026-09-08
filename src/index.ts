@@ -32,3 +32,7 @@ export * from './agent/AgentDriver';
 export * from './recording/SetRecorder';
 export * from './orchestration/GameSession';
 export * from './orchestration/SetOrchestrator';
+export * from './control/store';
+export * from './control/BotRunner';
+export * from './control/api';
+export * from './control/server';

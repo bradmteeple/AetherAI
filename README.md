@@ -30,6 +30,52 @@ sends the challenge, and then plays the whole set with the configured agent.
 Use `PS_MODE=accept` to wait for a challenge instead. Everything about the set
 is written to `runs/set_<date>_<n>/`.
 
+### Web control panel
+
+```bash
+npm run control                 # http://127.0.0.1:8080
+```
+
+A small built-in web page to turn the bot on and off and choose which Showdown
+account it logs in as — no `.env` edit, no restart:
+
+* **Power** — one switch. On connects and logs in as the selected account and
+  keeps playing sets until you switch it off; off abandons whatever set is in
+  progress and drops the connection. If the login fails, the panel says so and
+  the bot stays off.
+* **Account** — save any number of Showdown logins (username + optional
+  password) and pick the active one. Switching accounts requires the bot to be
+  off, so a set is never half-played by two identities.
+* **Settings** — mode (challenge/accept), opponent, agent (`mock`/`http` + URL),
+  team file, format, server and login URLs, timer, whether to keep playing sets
+  after each one, log level.
+* **Status and log** — connection state, current set/score, win-loss record and
+  a live tail of the connector's log.
+
+Accounts and settings live in `.aether/control.json` (owner-only, gitignored).
+Passwords are only ever sent *to* the server: the API returns `hasPassword`,
+never the password itself.
+
+The panel can start battles with your credentials, so it binds to `127.0.0.1`
+by default. To reach it from another machine, bind wider and use the token it
+prints (one is generated automatically if you do not set `CONTROL_TOKEN`):
+
+```bash
+npx tsx src/cli.ts control --host 0.0.0.0 --port 8080
+# AetherAI control panel: http://localhost:8080/?token=…
+```
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `CONTROL_HOST` | `127.0.0.1` | Bind address |
+| `CONTROL_PORT` | `8080` | Port |
+| `CONTROL_TOKEN` | — | Shared secret; required for every request when set, and auto-generated for non-loopback hosts |
+| `CONTROL_STATE_FILE` | `.aether/control.json` | Where accounts and settings are stored |
+
+The `.env` values are only the *defaults* the panel starts from — once saved,
+`.aether/control.json` wins, and `PS_USERNAME`/`PS_PASSWORD` are adopted as the
+first account on first run.
+
 ### Local end-to-end testing (recommended before the public server)
 
 ```bash
@@ -105,8 +151,9 @@ src/battle/        request types, BattleStateEngine, LegalActionGenerator, Actio
 src/set/           SetState/GameRecord, SetMemory, BestOfSetManager (state machine)
 src/agent/         BattleAgent interface, MockBattleAgent, HttpBattleAgent, AgentDriver (retry/fallback)
 src/orchestration/ GameSession (one game), SetOrchestrator (one set)
+src/control/       ControlStore (accounts/settings), BotRunner (on/off), HTTP API + control panel page
 src/recording/     SetRecorder (runs/set_*/...)
-tests/unit         protocol, team, legal actions, set manager, state engine
+tests/unit         protocol, team, legal actions, set manager, state engine, control panel
 tests/integration  full Bo3 sets against a local Showdown server
 ```
 

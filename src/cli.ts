@@ -10,6 +10,7 @@ import { SetOrchestrator } from './orchestration/SetOrchestrator';
 import { BattleAgent } from './agent/BattleAgent';
 import { FORMAT_ID, FORMAT_NAME } from './format';
 import { scoreString } from './set/SetState';
+import { startControlServer } from './control/server';
 
 function parseArgs(argv: string[]): { command: string; flags: Record<string, string | boolean>; positional: string[] } {
   const [command = 'help', ...rest] = argv;
@@ -33,6 +34,7 @@ function usage() {
 Usage:
   aether play [--mode challenge|accept] [--opponent NAME] [--agent mock|http] [--agent-url URL] [--team FILE]
   aether validate-team [FILE] [--server]     validate a team (static + local Showdown; --server also asks the connected server)
+  aether control [--host HOST] [--port PORT] [--token TOKEN]   web control panel: turn the bot on/off and pick the account
   aether help
 
 Configuration comes from environment variables / .env (see .env.example); flags override.`);
@@ -107,6 +109,24 @@ async function main() {
       const set = await orchestrator.runSet(cfg.mode === 'challenge' ? { mode: 'challenge', opponent: cfg.opponent! } : { mode: 'accept', from: cfg.opponent });
       log.info(`Set over: ${set.setWinner} (${scoreString(set)}); record in ${orchestrator.recorder?.dir ?? 'memory'}`);
       await conn.disconnect();
+      break;
+    }
+    case 'control': {
+      const control = await startControlServer({
+        host: typeof flags.host === 'string' ? flags.host : undefined,
+        port: typeof flags.port === 'string' ? Number(flags.port) : undefined,
+        token: typeof flags.token === 'string' ? flags.token : undefined,
+        runsDir: cfg.runsDir,
+      });
+      console.log(`AetherAI control panel: ${control.url}`);
+      console.log(`Accounts and settings: ${control.store.file}`);
+      if (control.token) console.log('A token is required — use the URL above exactly as printed.');
+      const shutdown = () => {
+        console.log('\nshutting down...');
+        void control.close().then(() => process.exit(0));
+      };
+      process.on('SIGINT', shutdown);
+      process.on('SIGTERM', shutdown);
       break;
     }
     default:
