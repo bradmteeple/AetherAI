@@ -7,6 +7,8 @@ import { BotRunner } from '../../src/control/BotRunner';
 import { startControlServer, ControlServer } from '../../src/control/server';
 import { Auth, SESSION_COOKIE } from '../../src/control/auth';
 import { parseTunnelUrl } from '../../scripts/share';
+import { renderControlPage } from '../../src/control/ui';
+import { DEFAULT_ALLOWED_ORIGINS, originAllowed, parseAllowedOrigins } from '../../src/control/cors';
 
 const dir = mkdtempSync(join(tmpdir(), 'aether-control-'));
 let n = 0;
@@ -335,5 +337,51 @@ describe('share: cloudflared output', () => {
     expect(parseTunnelUrl('INF Requesting new quick Tunnel on trycloudflare.com...')).toBeNull();
     expect(parseTunnelUrl('ERR Host not in allowlist: api.trycloudflare.com')).toBeNull();
     expect(parseTunnelUrl('')).toBeNull();
+  });
+});
+
+describe('control panel page', () => {
+  const script = (html: string) => /<script>([\s\S]*?)<\/script>/.exec(html)![1];
+
+  it('emits a script that parses, in both modes', () => {
+    // A stray escape in the TypeScript template literal silently breaks the
+    // page, which typechecking cannot see.
+    for (const sameOrigin of [true, false]) {
+      expect(() => new Function(script(renderControlPage({ sameOrigin })))).not.toThrow();
+    }
+  });
+
+  it('substitutes the same-origin marker', () => {
+    expect(script(renderControlPage({ sameOrigin: true }))).toContain('var SAME_ORIGIN = true;');
+    expect(script(renderControlPage({ sameOrigin: false }))).toContain('var SAME_ORIGIN = false;');
+    expect(renderControlPage({ sameOrigin: true })).not.toContain('/*SAME_ORIGIN*/');
+  });
+
+  it('keeps the URL normaliser regexes intact', () => {
+    const src = script(renderControlPage({ sameOrigin: false }));
+    expect(src).toContain(String.raw`replace(/\/+$/, '')`);
+    expect(src).toContain(String.raw`/^https?:\/\//i`);
+  });
+
+  it('forces [hidden] to win over the overlay display rules', () => {
+    expect(renderControlPage({ sameOrigin: false })).toContain('[hidden] { display: none !important; }');
+  });
+});
+
+describe('CORS', () => {
+  it('matches exact origins, wildcard hosts and *', () => {
+    expect(originAllowed('https://bradmteeple.github.io', DEFAULT_ALLOWED_ORIGINS)).toBe(true);
+    expect(originAllowed('https://evil.example', DEFAULT_ALLOWED_ORIGINS)).toBe(false);
+    expect(originAllowed('http://bradmteeple.github.io', DEFAULT_ALLOWED_ORIGINS)).toBe(false); // scheme must match
+    expect(originAllowed('https://notgithub.io', ['https://*.github.io'])).toBe(false);
+    expect(originAllowed('http://127.0.0.1:8140', ['http://127.0.0.1:8140'])).toBe(true);
+    expect(originAllowed('https://anything.example', ['*'])).toBe(true);
+    expect(originAllowed('', ['*'])).toBe(false);
+  });
+
+  it('parses the env allowlist, defaulting to GitHub Pages', () => {
+    expect(parseAllowedOrigins(undefined)).toEqual(DEFAULT_ALLOWED_ORIGINS);
+    expect(parseAllowedOrigins('https://a.example, https://b.example')).toEqual(['https://a.example', 'https://b.example']);
+    expect(parseAllowedOrigins('')).toEqual([]);
   });
 });

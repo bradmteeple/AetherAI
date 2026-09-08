@@ -143,11 +143,14 @@ export class Auth {
   /** Decide whether a request may touch the API. */
   check(req: IncomingMessage, url: URL): AuthResult {
     if (this.open) return { ok: true };
-    if (this.hasToken) {
-      const presented = bearerToken(req) ?? url.searchParams.get('token');
-      if (presented && equal(presented, this.token!)) return { ok: true };
+    const presented = bearerToken(req) ?? url.searchParams.get('token');
+    if (this.hasToken && presented && equal(presented, this.token!)) return { ok: true };
+    if (this.hasPassword) {
+      // Cookie for the panel served from this server, bearer for a front-end on
+      // another origin (GitHub Pages), which cannot use cookies safely.
+      if (this.validSession(readCookie(req, SESSION_COOKIE))) return { ok: true };
+      if (presented && this.validSession(presented)) return { ok: true };
     }
-    if (this.hasPassword && this.validSession(readCookie(req, SESSION_COOKIE))) return { ok: true };
     if (this.hasPassword) {
       return { ok: false, status: 401, error: 'Sign in to use the control panel', needsPassword: true };
     }

@@ -1,0 +1,50 @@
+# Publishes the control panel front-end to GitHub Pages.
+#
+# Enable it once in the repository: Settings → Pages → Source: GitHub Actions.
+# The page is then at https://<owner>.github.io/<repo>/ and asks for the address
+# of a running bot (`npm run share` prints one).
+name: Deploy control panel to Pages
+
+on:
+  push:
+    branches: [claude/pokemon-showdown-vgc-connector-ot97wu]
+    paths:
+      - 'src/control/ui.ts'
+      - 'scripts/build-pages.ts'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; never cancel one that is mid-flight.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:pages
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-pages
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,8 +1,23 @@
+export interface RenderOptions {
+  /**
+   * True when the control server itself serves the page, so the API is at the
+   * same origin. False for a standalone build (GitHub Pages), where the page
+   * asks for the bot's address and authenticates with a bearer token instead
+   * of a cookie.
+   */
+  sameOrigin: boolean;
+}
+
 /**
- * The control panel, served as one self-contained page (no build step, no CDN)
- * by {@link createControlServer}.
+ * The control panel: one self-contained page, no build step and no CDN.
+ * {@link startControlServer} serves it; `scripts/build-pages.ts` writes the
+ * standalone variant for GitHub Pages.
  */
-export const CONTROL_PAGE_HTML = `<!doctype html>
+export function renderControlPage(options: RenderOptions): string {
+  return PAGE.replace('/*SAME_ORIGIN*/false', options.sameOrigin ? 'true' : 'false');
+}
+
+const PAGE = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -18,6 +33,9 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
     --warn: #f2b544; --err: #ff6b6b;
   }
   * { box-sizing: border-box; }
+  /* Author styles beat the UA sheet, so the display rules below would otherwise
+     keep [hidden] overlays laid out and swallowing clicks. */
+  [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--text);
     font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   header { padding: 24px 20px 8px; max-width: 980px; margin: 0 auto; }
@@ -79,12 +97,25 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
   .gate-card p.sub { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
   .gate-card button { width: 100%; margin-top: 14px; }
   .gate-error { color: var(--err); font-size: 13px; margin: 12px 0 0; min-height: 18px; }
+  .gate-card code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .gate-card a { color: var(--accent); }
   header .bar { display: flex; align-items: baseline; gap: 12px; }
   header .bar .spacer { flex: 1; }
   @media (max-width: 760px) { main { grid-template-columns: 1fr; } .grid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
+<div class="gate" id="connect" hidden>
+  <form class="gate-card" id="connectForm">
+    <h1>AetherAI control</h1>
+    <p class="sub">Where is the bot running? Start it with <code>npm run share</code> and paste the
+       https://….trycloudflare.com address it prints (or your own server's URL).</p>
+    <label for="apiBase">Bot address</label>
+    <input id="apiBase" type="url" placeholder="https://something.trycloudflare.com" required />
+    <button type="submit" class="primary">Connect</button>
+    <p class="gate-error" id="connectError"></p>
+  </form>
+</div>
 <div class="gate" id="gate" hidden>
   <form class="gate-card" id="loginForm">
     <h1>AetherAI control</h1>
@@ -93,6 +124,7 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
     <input id="password" type="password" autocomplete="current-password" required />
     <button type="submit" class="primary">Sign in</button>
     <p class="gate-error" id="loginError"></p>
+    <p class="hint"><a href="#" id="changeAddress" hidden>Connect to a different bot</a></p>
   </form>
 </div>
 <div id="app" hidden>
@@ -101,6 +133,7 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
     <h1>AetherAI control</h1>
     <span class="spacer"></span>
     <button type="button" id="btnLogout" hidden>Sign out</button>
+    <button type="button" id="btnDisconnect" hidden>Change bot</button>
   </div>
   <p id="formatName">Pokémon Showdown connector</p>
 </header>
@@ -178,18 +211,44 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
 <div class="toast" id="toast"></div>
 <script>
 (function () {
-  var token = new URLSearchParams(location.search).get('token') || '';
+  var SAME_ORIGIN = /*SAME_ORIGIN*/false;
+  var params = new URLSearchParams(location.search);
   var logSeq = 0;
   var busy = false;
   var settingsDirty = false;
+
+  /** localStorage is unavailable in some privacy modes; never let that break the page. */
+  function remember(key, value) {
+    try {
+      if (value === null) localStorage.removeItem('aether.' + key);
+      else localStorage.setItem('aether.' + key, value);
+    } catch (e) { /* ignore */ }
+  }
+  function recall(key) {
+    try { return localStorage.getItem('aether.' + key) || ''; } catch (e) { return ''; }
+  }
+
+  // Same-origin: the control server serves this page and a cookie carries the
+  // session. Standalone (GitHub Pages): the bot lives at another origin, so the
+  // address and a bearer token are kept in this browser.
+  var apiBase = SAME_ORIGIN ? '' : (normalizeBase(params.get('api') || '') || recall('api'));
+  var token = SAME_ORIGIN ? (params.get('token') || '') : recall('token');
+
+  function normalizeBase(value) {
+    var trimmed = (value || '').trim().replace(/\\/+$/, '');
+    if (!trimmed) return '';
+    if (!/^https?:\\/\\//i.test(trimmed)) trimmed = 'https://' + trimmed;
+    return trimmed;
+  }
 
   function api(path, options) {
     options = options || {};
     var headers = { 'content-type': 'application/json' };
     if (token) headers.authorization = 'Bearer ' + token;
-    return fetch('/api' + path, {
+    return fetch(apiBase + '/api' + path, {
       method: options.method || 'GET',
       headers: headers,
+      credentials: SAME_ORIGIN ? 'same-origin' : 'omit',
       body: options.body ? JSON.stringify(options.body) : undefined
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (data) {
@@ -206,10 +265,23 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
 
   var authed = false;
 
+  function showConnect(message) {
+    authed = false;
+    document.getElementById('connect').hidden = false;
+    document.getElementById('gate').hidden = true;
+    document.getElementById('app').hidden = true;
+    document.getElementById('connectError').textContent = message || '';
+    var field = document.getElementById('apiBase');
+    field.value = apiBase;
+    field.focus();
+  }
+
   function showGate(message) {
     authed = false;
+    document.getElementById('connect').hidden = true;
     document.getElementById('gate').hidden = false;
     document.getElementById('app').hidden = true;
+    document.getElementById('changeAddress').hidden = SAME_ORIGIN;
     document.getElementById('loginError').textContent = message || '';
     var field = document.getElementById('password');
     field.value = '';
@@ -218,9 +290,11 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
 
   function showApp(needsPassword) {
     authed = true;
+    document.getElementById('connect').hidden = true;
     document.getElementById('gate').hidden = true;
     document.getElementById('app').hidden = false;
     document.getElementById('btnLogout').hidden = !needsPassword;
+    document.getElementById('btnDisconnect').hidden = SAME_ORIGIN;
     refresh();
     pollLogs();
   }
@@ -424,24 +498,70 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
     var button = event.target.querySelector('button');
     button.disabled = true;
     api('/login', { method: 'POST', body: { password: document.getElementById('password').value } })
-      .then(function () { document.getElementById('loginError').textContent = ''; showApp(true); })
+      .then(function (data) {
+        if (!SAME_ORIGIN && data.token) { token = data.token; remember('token', token); }
+        document.getElementById('loginError').textContent = '';
+        showApp(true);
+      })
       .catch(function (err) { document.getElementById('loginError').textContent = err.message; })
       .then(function () { button.disabled = false; });
   };
 
   document.getElementById('btnLogout').onclick = function () {
     api('/logout', { method: 'POST' })
-      .catch(function () { /* the cookie is gone either way */ })
-      .then(function () { showGate('Signed out.'); });
+      .catch(function () { /* the session is gone either way */ })
+      .then(function () {
+        token = '';
+        remember('token', null);
+        showGate('Signed out.');
+      });
   };
 
-  api('/session')
-    .then(function (session) {
-      if (session.authenticated) return showApp(session.needsPassword);
-      showGate(session.needsPassword ? '' : 'This panel is protected by a token — open it with the ?token=… link printed at startup.');
-      document.getElementById('password').disabled = !session.needsPassword;
-    })
-    .catch(function (err) { showGate(err.message); });
+  document.getElementById('btnDisconnect').onclick = function () { forgetBot(); };
+  document.getElementById('changeAddress').onclick = function (event) { event.preventDefault(); forgetBot(); };
+
+  function forgetBot() {
+    token = '';
+    remember('token', null);
+    showConnect('');
+  }
+
+  document.getElementById('connectForm').onsubmit = function (event) {
+    event.preventDefault();
+    var candidate = normalizeBase(document.getElementById('apiBase').value);
+    if (!candidate) return;
+    var button = event.target.querySelector('button');
+    button.disabled = true;
+    var previous = apiBase;
+    apiBase = candidate;
+    api('/session')
+      .then(function (session) {
+        remember('api', apiBase);
+        enter(session);
+      })
+      .catch(function (err) {
+        apiBase = previous;
+        showConnect('Could not reach that address: ' + err.message);
+      })
+      .then(function () { button.disabled = false; });
+  };
+
+  function enter(session) {
+    if (session.authenticated) return showApp(session.needsPassword);
+    showGate(session.needsPassword ? '' : 'This panel is protected by a token — open it with the ?token=… link printed at startup.');
+    document.getElementById('password').disabled = !session.needsPassword;
+  }
+
+  if (!SAME_ORIGIN && !apiBase) {
+    showConnect('');
+  } else {
+    api('/session')
+      .then(enter)
+      .catch(function (err) {
+        if (SAME_ORIGIN) showGate(err.message);
+        else showConnect('Could not reach ' + apiBase + ': ' + err.message);
+      });
+  }
 
   setInterval(refresh, 2000);
   setInterval(pollLogs, 1500);

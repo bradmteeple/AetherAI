@@ -3,9 +3,10 @@ import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http
 import { AddressInfo } from 'node:net';
 import { handleApi } from './api';
 import { Auth } from './auth';
+import { corsHeaders, handlePreflight, parseAllowedOrigins } from './cors';
 import { BotRunner } from './BotRunner';
 import { ControlStore } from './store';
-import { CONTROL_PAGE_HTML, FAVICON_SVG } from './ui';
+import { FAVICON_SVG, renderControlPage } from './ui';
 
 export interface ControlServerOptions {
   host?: string;
@@ -20,6 +21,11 @@ export interface ControlServerOptions {
   token?: string;
   /** Admin password for the browser login. Defaults to `CONTROL_PASSWORD`. */
   password?: string;
+  /**
+   * Browser origins allowed to call the API (a panel hosted on GitHub Pages,
+   * say). Defaults to `CONTROL_ALLOWED_ORIGINS`, else `https://*.github.io`.
+   */
+  allowedOrigins?: string[];
   /** Directory for set records (`null` disables recording). */
   runsDir?: string | null;
   echoLogs?: boolean;
@@ -27,6 +33,7 @@ export interface ControlServerOptions {
 
 export interface ControlServer {
   server: Server;
+  allowedOrigins: string[];
   store: ControlStore;
   runner: BotRunner;
   auth: Auth;
@@ -60,6 +67,8 @@ export async function startControlServer(options: ControlServerOptions = {}): Pr
   // Never leave a panel that is reachable off-machine wide open.
   if (!token && !password && !isLoopback(host)) token = randomBytes(24).toString('base64url');
   const auth = new Auth({ password: password ?? undefined, token: token ?? undefined });
+  const allowedOrigins = options.allowedOrigins ?? parseAllowedOrigins(process.env.CONTROL_ALLOWED_ORIGINS);
+  const page = renderControlPage({ sameOrigin: true });
 
   const server = createServer((req, res) => {
     void route(req, res).catch((err) => {
@@ -71,6 +80,10 @@ export async function startControlServer(options: ControlServerOptions = {}): Pr
 
   async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+    if (url.pathname.startsWith('/api/')) {
+      if (handlePreflight(req, res, allowedOrigins)) return;
+      for (const [name, value] of Object.entries(corsHeaders(req, allowedOrigins))) res.setHeader(name, value);
+    }
     if (await handleApi(req, res, url, { store, runner, auth })) return;
     if (url.pathname === '/' || url.pathname === '/index.html') {
       if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -79,12 +92,12 @@ export async function startControlServer(options: ControlServerOptions = {}): Pr
       }
       res.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',
-        'content-length': Buffer.byteLength(CONTROL_PAGE_HTML),
+        'content-length': Buffer.byteLength(page),
         'cache-control': 'no-store',
         'referrer-policy': 'no-referrer',
         'x-content-type-options': 'nosniff',
       });
-      return void res.end(req.method === 'HEAD' ? undefined : CONTROL_PAGE_HTML);
+      return void res.end(req.method === 'HEAD' ? undefined : page);
     }
     if (url.pathname === '/favicon.svg') {
       res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'max-age=86400' });
@@ -117,6 +130,7 @@ export async function startControlServer(options: ControlServerOptions = {}): Pr
     store,
     runner,
     auth,
+    allowedOrigins,
     host,
     port: actualPort,
     token,
