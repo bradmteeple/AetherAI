@@ -1,0 +1,50 @@
+# Fly.io deployment for the AetherAI control panel.
+#
+#   fly launch --no-deploy --copy-config       # pick a name and region
+#   fly volumes create aether_data --size 1    # accounts, settings, set records
+#   fly secrets set CONTROL_PASSWORD='a long random password'
+#   fly deploy
+#
+# The panel is then at https://<app>.fly.dev — sign in with CONTROL_PASSWORD.
+app = "aetherai-control"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  CONTROL_HOST = "0.0.0.0"
+  CONTROL_PORT = "8080"
+  CONTROL_STATE_FILE = "/data/control.json"
+  RUNS_DIR = "/data/runs"
+  LOG_LEVEL = "info"
+
+[mounts]
+  source = "aether_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # The bot holds a WebSocket to Showdown while it is on, so the machine must
+  # never be stopped or scaled to zero underneath it.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 50
+    soft_limit = 25
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/healthz"
+
+# One machine only: two would each try to log the same account in.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

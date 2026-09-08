@@ -57,24 +57,63 @@ Passwords are only ever sent *to* the server: the API returns `hasPassword`,
 never the password itself.
 
 The panel can start battles with your credentials, so it binds to `127.0.0.1`
-by default. To reach it from another machine, bind wider and use the token it
-prints (one is generated automatically if you do not set `CONTROL_TOKEN`):
+and needs no password there. Set `CONTROL_PASSWORD` and it shows a sign-in
+screen instead — required for any deployment that is reachable from elsewhere:
 
 ```bash
-npx tsx src/cli.ts control --host 0.0.0.0 --port 8080
-# AetherAI control panel: http://localhost:8080/?token=…
+CONTROL_PASSWORD='a long random password' npx tsx src/cli.ts control --host 0.0.0.0
 ```
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `CONTROL_HOST` | `127.0.0.1` | Bind address |
 | `CONTROL_PORT` | `8080` | Port |
-| `CONTROL_TOKEN` | — | Shared secret; required for every request when set, and auto-generated for non-loopback hosts |
+| `CONTROL_PASSWORD` | — | Sign-in password for the browser. Sessions are a signed `HttpOnly` cookie valid for 14 days; changing the password signs everyone out |
+| `CONTROL_TOKEN` | — | Shared secret for scripts (`Authorization: Bearer …` or `?token=`). Auto-generated if the panel would otherwise be reachable off-machine with no password |
 | `CONTROL_STATE_FILE` | `.aether/control.json` | Where accounts and settings are stored |
 
 The `.env` values are only the *defaults* the panel starts from — once saved,
 `.aether/control.json` wins, and `PS_USERNAME`/`PS_PASSWORD` are adopted as the
 first account on first run.
+
+### Hosting it (Fly.io)
+
+The panel is not a static site: the bot runs *inside* the same process and
+holds a WebSocket to Showdown for as long as it is on, so it needs a host that
+runs a Node process continuously. The included `Dockerfile` and `fly.toml` do
+that on Fly.io, with a volume for accounts and set records:
+
+```bash
+fly launch --no-deploy --copy-config      # choose an app name and region
+fly volumes create aether_data --size 1   # accounts, settings, runs/
+fly secrets set CONTROL_PASSWORD="$(openssl rand -base64 24)"
+fly deploy
+```
+
+The panel is then at `https://<app>.fly.dev`, behind the sign-in screen, and
+you can turn the bot on and off from any browser. Notes on the config:
+
+* `auto_stop_machines = false` and `min_machines_running = 1` — Fly must not
+  scale the machine to zero underneath a live battle.
+* One machine only. Two would each try to log the same Showdown account in.
+* `/data` holds `control.json` (mode 0600) and `runs/`, so accounts, settings
+  and set records survive deploys and restarts.
+* `force_https = true`, and the session cookie is marked `Secure` when the
+  request arrives over HTTPS (via `x-forwarded-proto`).
+* Failed sign-ins are rate limited per client address with an exponential
+  lockout, keyed off `fly-client-ip`.
+
+Any other Node host works the same way — the image is plain Docker:
+
+```bash
+docker build -t aetherai .
+docker run -p 8080:8080 -e CONTROL_PASSWORD=... -v aether:/data aetherai
+```
+
+Two things worth being deliberate about before putting it online: the machine
+holds your Showdown password, and the bot plays under your account, so use a
+long `CONTROL_PASSWORD` and check that a bot account is acceptable wherever you
+point it.
 
 ### Local end-to-end testing (recommended before the public server)
 
@@ -151,7 +190,7 @@ src/battle/        request types, BattleStateEngine, LegalActionGenerator, Actio
 src/set/           SetState/GameRecord, SetMemory, BestOfSetManager (state machine)
 src/agent/         BattleAgent interface, MockBattleAgent, HttpBattleAgent, AgentDriver (retry/fallback)
 src/orchestration/ GameSession (one game), SetOrchestrator (one set)
-src/control/       ControlStore (accounts/settings), BotRunner (on/off), HTTP API + control panel page
+src/control/       ControlStore (accounts/settings), BotRunner (on/off), Auth (login), HTTP API + control panel page
 src/recording/     SetRecorder (runs/set_*/...)
 tests/unit         protocol, team, legal actions, set manager, state engine, control panel
 tests/integration  full Bo3 sets against a local Showdown server

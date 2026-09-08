@@ -1,43 +1,26 @@
 import { IncomingMessage, ServerResponse } from 'node:http';
-import { timingSafeEqual } from 'node:crypto';
 import { FORMAT_ID, FORMAT_NAME } from '../format';
+import { Auth, AuthError, clientIp } from './auth';
 import { BotRunner, BotRunnerError } from './BotRunner';
 import { ControlStore, ControlStoreError } from './store';
 
 export interface ApiOptions {
   store: ControlStore;
   runner: BotRunner;
-  /** When set, every request must present it (`Authorization: Bearer …` or `?token=`). */
-  token?: string;
+  auth: Auth;
 }
 
 interface Handled {
   status: number;
   body: unknown;
+  headers?: Record<string, string>;
 }
 
 const MAX_BODY_BYTES = 64 * 1024;
 
 function statusOf(err: unknown): number {
-  if (err instanceof BotRunnerError || err instanceof ControlStoreError) return err.status;
+  if (err instanceof BotRunnerError || err instanceof ControlStoreError || err instanceof AuthError) return err.status;
   return 500;
-}
-
-function safeEqual(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
-}
-
-export function presentedToken(req: IncomingMessage, url: URL): string | null {
-  const header = req.headers.authorization;
-  if (header?.startsWith('Bearer ')) return header.slice(7).trim();
-  const query = url.searchParams.get('token');
-  if (query) return query;
-  const cookie = /(?:^|;\s*)aether_token=([^;]+)/.exec(req.headers.cookie ?? '');
-  if (cookie) return decodeURIComponent(cookie[1]);
-  return null;
 }
 
 async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
@@ -64,24 +47,30 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
  */
 export async function handleApi(req: IncomingMessage, res: ServerResponse, url: URL, options: ApiOptions): Promise<boolean> {
   if (!url.pathname.startsWith('/api/')) return false;
-  const { store, runner, token } = options;
-
-  if (token && !safeEqual(presentedToken(req, url) ?? '', token)) {
-    send(res, 401, { error: 'Unauthorized — open the panel with the ?token= link printed at startup' });
-    return true;
-  }
-
+  const { store, runner, auth } = options;
   const method = req.method ?? 'GET';
   const route = `${method} ${url.pathname}`;
+
+  // The session routes are the way in, so they authenticate themselves.
+  if (route !== 'POST /api/login' && route !== 'GET /api/session') {
+    const allowed = auth.check(req, url);
+    if (!allowed.ok) {
+      const headers = allowed.retryAfterSec ? { 'retry-after': String(allowed.retryAfterSec) } : undefined;
+      send(res, allowed.status, { error: allowed.error, needsPassword: allowed.needsPassword }, headers);
+      return true;
+    }
+  }
+
   try {
-    const result = await dispatch(route, req, url, store, runner);
+    const result = await dispatch(route, req, url, store, runner, auth);
     if (!result) send(res, 404, { error: `No such endpoint: ${route}` });
-    else send(res, result.status, result.body);
+    else send(res, result.status, result.body, result.headers);
   } catch (err) {
     const status = statusOf(err);
-    const expected = err instanceof BotRunnerError || err instanceof ControlStoreError;
+    const expected = err instanceof BotRunnerError || err instanceof ControlStoreError || err instanceof AuthError;
     if (!expected) process.stderr.write(`control api error: ${(err as Error).stack ?? err}\n`);
-    send(res, status, { error: (err as Error).message });
+    const headers = err instanceof AuthError && err.retryAfterSec ? { 'retry-after': String(err.retryAfterSec) } : undefined;
+    send(res, status, { error: (err as Error).message, needsPassword: err instanceof AuthError && status === 401 }, headers);
   }
   return true;
 }
@@ -92,8 +81,32 @@ async function dispatch(
   url: URL,
   store: ControlStore,
   runner: BotRunner,
+  auth: Auth,
 ): Promise<Handled | null> {
   switch (route) {
+    case 'GET /api/session':
+      return {
+        status: 200,
+        body: {
+          authenticated: auth.check(req, url).ok,
+          needsPassword: auth.hasPassword,
+          open: auth.open,
+        },
+      };
+
+    case 'POST /api/login': {
+      const body = await readJson(req);
+      const session = auth.login(body.password, clientIp(req));
+      return {
+        status: 200,
+        body: { authenticated: true, expiresAt: new Date(session.expiresAt).toISOString() },
+        headers: { 'set-cookie': auth.cookieHeader(session.cookie, req) },
+      };
+    }
+
+    case 'POST /api/logout':
+      return { status: 200, body: { authenticated: false }, headers: { 'set-cookie': auth.clearCookieHeader(req) } };
+
     case 'GET /api/status':
       return { status: 200, body: runner.report() };
 
@@ -172,12 +185,13 @@ async function dispatch(
   }
 }
 
-function send(res: ServerResponse, status: number, body: unknown): void {
+function send(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}): void {
   const payload = JSON.stringify(body ?? null);
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'content-length': Buffer.byteLength(payload),
     'cache-control': 'no-store',
+    ...headers,
   });
   res.end(payload);
 }

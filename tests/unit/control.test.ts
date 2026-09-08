@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ControlStore } from '../../src/control/store';
 import { BotRunner } from '../../src/control/BotRunner';
 import { startControlServer, ControlServer } from '../../src/control/server';
+import { Auth, SESSION_COOKIE } from '../../src/control/auth';
 
 const dir = mkdtempSync(join(tmpdir(), 'aether-control-'));
 let n = 0;
@@ -14,6 +15,7 @@ beforeAll(() => {
   delete process.env.PS_USERNAME;
   delete process.env.PS_PASSWORD;
   delete process.env.CONTROL_TOKEN;
+  delete process.env.CONTROL_PASSWORD;
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -195,5 +197,132 @@ describe('control server with a token', () => {
     expect((await fetch(base + '/api/status?token=sesame')).status).toBe(200);
     expect((await fetch(base + '/api/status', { headers: { authorization: 'Bearer sesame' } })).status).toBe(200);
     expect(control.url).toContain('token=sesame');
+  });
+});
+
+describe('Auth', () => {
+  const req = (headers: Record<string, string> = {}) =>
+    ({ headers, socket: { remoteAddress: '198.51.100.4' } }) as any;
+
+  it('is open only when nothing is configured', () => {
+    expect(new Auth().open).toBe(true);
+    expect(new Auth({ password: 'pw' }).open).toBe(false);
+    expect(new Auth({ token: 'tk' }).open).toBe(false);
+  });
+
+  it('mints sessions that verify, expire and do not survive a password change', () => {
+    let clock = 1_000;
+    const auth = new Auth({ password: 'pw', now: () => clock });
+    const { cookie } = auth.login('pw', 'ip');
+    expect(auth.validSession(cookie)).toBe(true);
+    expect(auth.validSession(cookie.slice(0, -3) + 'aaa')).toBe(false);
+    expect(auth.validSession('v1.9999999999999.x.y')).toBe(false);
+    expect(new Auth({ password: 'different', now: () => clock }).validSession(cookie)).toBe(false);
+    // A restart with the same password keeps existing sessions valid.
+    expect(new Auth({ password: 'pw', now: () => clock }).validSession(cookie)).toBe(true);
+    clock += 15 * 24 * 60 * 60 * 1_000;
+    expect(auth.validSession(cookie)).toBe(false);
+  });
+
+  it('locks out repeated wrong passwords per client address', () => {
+    let clock = 0;
+    const auth = new Auth({ password: 'pw', now: () => clock });
+    for (let i = 0; i < 5; i++) expect(() => auth.login('nope', 'attacker')).toThrow(/Wrong password/);
+    expect(() => auth.login('nope', 'attacker')).toThrow(/Too many attempts/);
+    expect(() => auth.login('pw', 'attacker')).toThrow(/Too many attempts/);
+    expect(() => auth.login('pw', 'someone-else')).not.toThrow(); // the lockout is per address
+    clock += 61_000;
+    expect(() => auth.login('pw', 'attacker')).not.toThrow();
+  });
+
+  it('accepts a bearer token or query token when one is configured', () => {
+    const auth = new Auth({ token: 'tk' });
+    const url = new URL('http://x/api/status');
+    expect(auth.check(req(), url).ok).toBe(false);
+    expect(auth.check(req({ authorization: 'Bearer tk' }), url).ok).toBe(true);
+    expect(auth.check(req({ authorization: 'Bearer nope' }), url).ok).toBe(false);
+    expect(auth.check(req(), new URL('http://x/api/status?token=tk')).ok).toBe(true);
+  });
+
+  it('marks the cookie Secure only when the request arrived over https', () => {
+    const auth = new Auth({ password: 'pw' });
+    expect(auth.cookieHeader('v', req())).not.toContain('Secure');
+    expect(auth.cookieHeader('v', req({ 'x-forwarded-proto': 'https' }))).toContain('Secure');
+    expect(auth.cookieHeader('v', req())).toContain('HttpOnly');
+    expect(auth.cookieHeader('v', req())).toContain('SameSite=Strict');
+  });
+});
+
+describe('control server behind a password', () => {
+  let control: ControlServer;
+  let base: string;
+
+  beforeAll(async () => {
+    const store = newStore();
+    control = await startControlServer({
+      port: 0,
+      password: 'correct horse',
+      store,
+      runner: new BotRunner(store, { runsDir: null, echoLogs: false }),
+    });
+    base = `http://127.0.0.1:${control.port}`;
+  });
+  afterAll(async () => control.close());
+
+  it('serves the page but locks the API until you sign in', async () => {
+    expect((await fetch(base + '/')).status).toBe(200);
+    expect(control.url).not.toContain('token');
+    expect(control.passwordProtected).toBe(true);
+
+    const anon = await fetch(base + '/api/session');
+    expect(await anon.json()).toMatchObject({ authenticated: false, needsPassword: true, open: false });
+
+    const denied = await fetch(base + '/api/status');
+    expect(denied.status).toBe(401);
+    expect(await denied.json()).toMatchObject({ needsPassword: true });
+
+    const wrong = await fetch(base + '/api/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: 'guess' }),
+    });
+    expect(wrong.status).toBe(401);
+    expect(wrong.headers.get('set-cookie')).toBeNull();
+
+    const ok = await fetch(base + '/api/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: 'correct horse' }),
+    });
+    expect(ok.status).toBe(200);
+    const cookie = ok.headers.get('set-cookie')!;
+    expect(cookie).toContain(SESSION_COOKIE);
+    expect(cookie).toContain('HttpOnly');
+
+    const session = cookie.split(';')[0];
+    const allowed = await fetch(base + '/api/status', { headers: { cookie: session } });
+    expect(allowed.status).toBe(200);
+    expect((await allowed.json()).status).toBe('off');
+
+    const out = await fetch(base + '/api/logout', { method: 'POST', headers: { cookie: session } });
+    expect(out.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
+  it('never leaks a stored password through the API, signed in or not', async () => {
+    const login = await fetch(base + '/api/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: 'correct horse' }),
+    });
+    const session = login.headers.get('set-cookie')!.split(';')[0];
+    await fetch(base + '/api/accounts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: session },
+      body: JSON.stringify({ username: 'HostedBot', password: 'showdown-secret' }),
+    });
+    const config = await (await fetch(base + '/api/config', { headers: { cookie: session } })).text();
+    expect(config).toContain('HostedBot');
+    expect(config).not.toContain('showdown-secret');
+    expect(config).not.toContain('correct horse');
   });
 });

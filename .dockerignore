@@ -1,0 +1,12 @@
+node_modules
+dist
+runs
+.showdown
+.aether
+.git
+.env
+*.log
+tests
+examples
+scripts
+docs

@@ -34,7 +34,8 @@ function usage() {
 Usage:
   aether play [--mode challenge|accept] [--opponent NAME] [--agent mock|http] [--agent-url URL] [--team FILE]
   aether validate-team [FILE] [--server]     validate a team (static + local Showdown; --server also asks the connected server)
-  aether control [--host HOST] [--port PORT] [--token TOKEN]   web control panel: turn the bot on/off and pick the account
+  aether control [--host HOST] [--port PORT] [--password PW] [--token TOKEN]
+                                            web control panel: turn the bot on/off and pick the account
   aether help
 
 Configuration comes from environment variables / .env (see .env.example); flags override.`);
@@ -116,11 +117,14 @@ async function main() {
         host: typeof flags.host === 'string' ? flags.host : undefined,
         port: typeof flags.port === 'string' ? Number(flags.port) : undefined,
         token: typeof flags.token === 'string' ? flags.token : undefined,
+        password: typeof flags.password === 'string' ? flags.password : undefined,
         runsDir: cfg.runsDir,
       });
       console.log(`AetherAI control panel: ${control.url}`);
       console.log(`Accounts and settings: ${control.store.file}`);
-      if (control.token) console.log('A token is required — use the URL above exactly as printed.');
+      if (control.passwordProtected) console.log('Sign in with the password in CONTROL_PASSWORD.');
+      else if (control.token) console.log('A token is required — use the URL above exactly as printed.');
+      else console.log('No password set: anyone who can reach this port can control the bot.');
       const shutdown = () => {
         console.log('\nshutting down...');
         void control.close().then(() => process.exit(0));
