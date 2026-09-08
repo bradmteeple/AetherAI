@@ -19,6 +19,7 @@
     "test:all": "vitest run",
     "play": "tsx src/cli.ts play",
     "control": "tsx src/cli.ts control",
+    "share": "tsx scripts/share.ts",
     "validate-team": "tsx src/cli.ts validate-team",
     "agent-server": "tsx examples/agent-server.ts",
     "setup:showdown": "bash scripts/setup-local-showdown.sh",

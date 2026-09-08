@@ -6,6 +6,7 @@ import { ControlStore } from '../../src/control/store';
 import { BotRunner } from '../../src/control/BotRunner';
 import { startControlServer, ControlServer } from '../../src/control/server';
 import { Auth, SESSION_COOKIE } from '../../src/control/auth';
+import { parseTunnelUrl } from '../../scripts/share';
 
 const dir = mkdtempSync(join(tmpdir(), 'aether-control-'));
 let n = 0;
@@ -302,7 +303,7 @@ describe('control server behind a password', () => {
     const session = cookie.split(';')[0];
     const allowed = await fetch(base + '/api/status', { headers: { cookie: session } });
     expect(allowed.status).toBe(200);
-    expect((await allowed.json()).status).toBe('off');
+    expect(((await allowed.json()) as any).status).toBe('off');
 
     const out = await fetch(base + '/api/logout', { method: 'POST', headers: { cookie: session } });
     expect(out.headers.get('set-cookie')).toContain('Max-Age=0');
@@ -324,5 +325,15 @@ describe('control server behind a password', () => {
     expect(config).toContain('HostedBot');
     expect(config).not.toContain('showdown-secret');
     expect(config).not.toContain('correct horse');
+  });
+});
+
+describe('share: cloudflared output', () => {
+  it('picks the quick-tunnel URL out of a log line', () => {
+    const line = '2026-09-08T01:08:21Z INF |  https://neatly-picked-words.trycloudflare.com  |';
+    expect(parseTunnelUrl(line)).toBe('https://neatly-picked-words.trycloudflare.com');
+    expect(parseTunnelUrl('INF Requesting new quick Tunnel on trycloudflare.com...')).toBeNull();
+    expect(parseTunnelUrl('ERR Host not in allowlist: api.trycloudflare.com')).toBeNull();
+    expect(parseTunnelUrl('')).toBeNull();
   });
 });
