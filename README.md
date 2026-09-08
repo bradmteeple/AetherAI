@@ -33,7 +33,8 @@ is written to `runs/set_<date>_<n>/`.
 ### Web control panel
 
 ```bash
-npm run control                 # http://127.0.0.1:8080
+npm run control                 # http://127.0.0.1:8080  (this machine only)
+npm run share                   # https://….trycloudflare.com  (public, no account)
 ```
 
 A small built-in web page to turn the bot on and off and choose which Showdown
@@ -76,12 +77,44 @@ The `.env` values are only the *defaults* the panel starts from — once saved,
 `.aether/control.json` wins, and `PS_USERNAME`/`PS_PASSWORD` are adopted as the
 first account on first run.
 
-### Hosting it (Fly.io)
+### A public URL with no hosting account
+
+```bash
+npm run share
+```
+
+Starts the panel and opens a **Cloudflare Quick Tunnel** to it — no account, no
+signup, no card:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Control panel:  https://neatly-picked-words.trycloudflare.com  │
+│  Password:       TNfiXmv9jiyb                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+That address works from any browser anywhere. `cloudflared` is downloaded into
+`.aether/bin` the first time if it is not already installed.
+
+What you are trading away for the zero-setup:
+
+* **It lasts as long as the command runs.** Close it and the URL is dead; the
+  next run gets a different address. Your machine has to stay awake.
+* A password is generated for you each run — pass `CONTROL_PASSWORD` to fix it,
+  or `npm run share -- --open` to publish with no password at all (then anyone
+  with the link can turn the bot on and off).
+* Cloudflare rate limits and does not guarantee uptime for account-less
+  tunnels.
+
+For an address that stays put, deploy it properly:
+
+### A permanent URL (Fly.io, or any Docker host)
 
 The panel is not a static site: the bot runs *inside* the same process and
 holds a WebSocket to Showdown for as long as it is on, so it needs a host that
-runs a Node process continuously. The included `Dockerfile` and `fly.toml` do
-that on Fly.io, with a volume for accounts and set records:
+runs a Node process continuously — Vercel/Netlify/Pages cannot serve this. The
+included `Dockerfile` and `fly.toml` do it on Fly.io, with a volume for
+accounts and set records:
 
 ```bash
 fly launch --no-deploy --copy-config      # choose an app name and region
@@ -103,7 +136,8 @@ you can turn the bot on and off from any browser. Notes on the config:
 * Failed sign-ins are rate limited per client address with an exponential
   lockout, keyed off `fly-client-ip`.
 
-Any other Node host works the same way — the image is plain Docker:
+Fly needs an account (free tier, card on file). Render, Railway, Koyeb and any
+VPS take the same image — the Dockerfile is plain Docker:
 
 ```bash
 docker build -t aetherai .
@@ -191,6 +225,7 @@ src/set/           SetState/GameRecord, SetMemory, BestOfSetManager (state machi
 src/agent/         BattleAgent interface, MockBattleAgent, HttpBattleAgent, AgentDriver (retry/fallback)
 src/orchestration/ GameSession (one game), SetOrchestrator (one set)
 src/control/       ControlStore (accounts/settings), BotRunner (on/off), Auth (login), HTTP API + control panel page
+scripts/share.ts   `npm run share` — the panel on a public Cloudflare Quick Tunnel URL
 src/recording/     SetRecorder (runs/set_*/...)
 tests/unit         protocol, team, legal actions, set manager, state engine, control panel
 tests/integration  full Bo3 sets against a local Showdown server
