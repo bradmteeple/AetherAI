@@ -6,3 +6,4 @@ runs/
 *.log
 .vitest-cache/
 .aether/
+dist-pages/

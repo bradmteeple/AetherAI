@@ -35,6 +35,7 @@ is written to `runs/set_<date>_<n>/`.
 ```bash
 npm run control                 # http://127.0.0.1:8080  (this machine only)
 npm run share                   # https://….trycloudflare.com  (public, no account)
+npm run build:pages             # the same page as a static site for GitHub Pages
 ```
 
 A small built-in web page to turn the bot on and off and choose which Showdown
@@ -71,13 +72,41 @@ CONTROL_PASSWORD='a long random password' npx tsx src/cli.ts control --host 0.0.
 | `CONTROL_PORT` | `8080` | Port |
 | `CONTROL_PASSWORD` | — | Sign-in password for the browser. Sessions are a signed `HttpOnly` cookie valid for 14 days; changing the password signs everyone out |
 | `CONTROL_TOKEN` | — | Shared secret for scripts (`Authorization: Bearer …` or `?token=`). Auto-generated if the panel would otherwise be reachable off-machine with no password |
+| `CONTROL_ALLOWED_ORIGINS` | `https://*.github.io` | Browser origins allowed to call the API cross-origin (comma separated; `*` for any) |
 | `CONTROL_STATE_FILE` | `.aether/control.json` | Where accounts and settings are stored |
 
 The `.env` values are only the *defaults* the panel starts from — once saved,
 `.aether/control.json` wins, and `PS_USERNAME`/`PS_PASSWORD` are adopted as the
 first account on first run.
 
-### A public URL with no hosting account
+### A permanent link on GitHub Pages
+
+GitHub Pages serves static files, so it cannot run the bot — the bot holds a
+WebSocket to Showdown and needs a real process. What it *can* host, for free
+and forever at a URL that never changes, is the **panel itself**, pointed at
+wherever your bot is running:
+
+```
+https://<owner>.github.io/<repo>/          the page  (GitHub Pages, permanent)
+        ↓  you paste the address once, the browser remembers it
+https://….trycloudflare.com                the bot   (npm run share, your machine)
+```
+
+Enable it once: **Settings → Pages → Source: GitHub Actions**. The workflow in
+`.github/workflows/pages.yml` publishes `scripts/build-pages.ts`' output on
+every push that touches the page.
+
+Then bookmark the Pages URL. The first visit asks for the bot's address; after
+that it goes straight to the sign-in screen. When your tunnel URL changes, hit
+**Change bot** and paste the new one — the bookmark itself never changes.
+
+The standalone page authenticates with a bearer token in `localStorage` rather
+than a cookie, so there are no cross-site cookies and nothing for another site
+to ride on. The bot only answers browsers from origins in
+`CONTROL_ALLOWED_ORIGINS`, which defaults to `https://*.github.io`; set it to
+your exact Pages origin to narrow that, or to `*` to allow any.
+
+### A public URL for the bot, with no hosting account
 
 ```bash
 npm run share
@@ -226,6 +255,7 @@ src/agent/         BattleAgent interface, MockBattleAgent, HttpBattleAgent, Agen
 src/orchestration/ GameSession (one game), SetOrchestrator (one set)
 src/control/       ControlStore (accounts/settings), BotRunner (on/off), Auth (login), HTTP API + control panel page
 scripts/share.ts   `npm run share` — the panel on a public Cloudflare Quick Tunnel URL
+scripts/build-pages.ts  `npm run build:pages` — the panel as a static site for GitHub Pages
 src/recording/     SetRecorder (runs/set_*/...)
 tests/unit         protocol, team, legal actions, set manager, state engine, control panel
 tests/integration  full Bo3 sets against a local Showdown server

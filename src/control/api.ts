@@ -99,7 +99,9 @@ async function dispatch(
       const session = auth.login(body.password, clientIp(req));
       return {
         status: 200,
-        body: { authenticated: true, expiresAt: new Date(session.expiresAt).toISOString() },
+        // The token is the same signed session as the cookie: a front-end on
+        // another origin stores it and sends it as `Authorization: Bearer …`.
+        body: { authenticated: true, token: session.cookie, expiresAt: new Date(session.expiresAt).toISOString() },
         headers: { 'set-cookie': auth.cookieHeader(session.cookie, req) },
       };
     }
