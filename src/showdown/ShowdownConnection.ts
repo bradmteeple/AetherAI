@@ -107,6 +107,10 @@ export class ShowdownConnection extends EventEmitter {
     return new Promise<void>((resolve, reject) => {
       this.setState('connecting');
       this.loginDeferred = new Deferred<string>();
+      // If the socket dies before `waitForLogin` subscribes (e.g. the server
+      // refuses the connection), onClosed still rejects this deferred; keep the
+      // rejection handled so it never surfaces as an unhandled rejection.
+      this.loginDeferred.promise.catch(() => undefined);
       this.challstr = null;
       const ws = new WebSocket(this.options.serverUrl);
       this.ws = ws;
