@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { createServer, IncomingMessage, Server, ServerResponse } from 'node:http';
 import { AddressInfo } from 'node:net';
 import { handleApi } from './api';
+import { Auth } from './auth';
 import { BotRunner } from './BotRunner';
 import { ControlStore } from './store';
 import { CONTROL_PAGE_HTML, FAVICON_SVG } from './ui';
@@ -12,10 +13,13 @@ export interface ControlServerOptions {
   store?: ControlStore;
   runner?: BotRunner;
   /**
-   * Shared secret every request must present. Defaults to `CONTROL_TOKEN`; a
-   * token is generated automatically when binding to a non-loopback address.
+   * Shared secret for scripted access (`Authorization: Bearer …` or `?token=`).
+   * Defaults to `CONTROL_TOKEN`; one is generated when a panel would otherwise
+   * be reachable off-machine with no way to authenticate.
    */
   token?: string;
+  /** Admin password for the browser login. Defaults to `CONTROL_PASSWORD`. */
+  password?: string;
   /** Directory for set records (`null` disables recording). */
   runsDir?: string | null;
   echoLogs?: boolean;
@@ -25,9 +29,12 @@ export interface ControlServer {
   server: Server;
   store: ControlStore;
   runner: BotRunner;
+  auth: Auth;
   host: string;
   port: number;
   token: string | null;
+  /** True when a password protects the browser UI. */
+  passwordProtected: boolean;
   url: string;
   close(): Promise<void>;
 }
@@ -48,8 +55,11 @@ export async function startControlServer(options: ControlServerOptions = {}): Pr
   const port = options.port ?? Number(process.env.CONTROL_PORT ?? 8080);
   const store = options.store ?? new ControlStore();
   const runner = options.runner ?? new BotRunner(store, { runsDir: options.runsDir, echoLogs: options.echoLogs });
+  const password = options.password ?? process.env.CONTROL_PASSWORD ?? null;
   let token = options.token ?? process.env.CONTROL_TOKEN ?? null;
-  if (!token && !isLoopback(host)) token = randomBytes(24).toString('base64url');
+  // Never leave a panel that is reachable off-machine wide open.
+  if (!token && !password && !isLoopback(host)) token = randomBytes(24).toString('base64url');
+  const auth = new Auth({ password: password ?? undefined, token: token ?? undefined });
 
   const server = createServer((req, res) => {
     void route(req, res).catch((err) => {
@@ -61,7 +71,7 @@ export async function startControlServer(options: ControlServerOptions = {}): Pr
 
   async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
-    if (await handleApi(req, res, url, { store, runner, token: token ?? undefined })) return;
+    if (await handleApi(req, res, url, { store, runner, auth })) return;
     if (url.pathname === '/' || url.pathname === '/index.html') {
       if (req.method !== 'GET' && req.method !== 'HEAD') {
         res.writeHead(405, { allow: 'GET, HEAD' });
@@ -98,15 +108,19 @@ export async function startControlServer(options: ControlServerOptions = {}): Pr
 
   const actualPort = (server.address() as AddressInfo).port;
   const displayHost = host === '0.0.0.0' || host === '::' ? 'localhost' : host;
-  const url = `http://${displayHost}:${actualPort}/${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  // A password login needs no secret in the URL; a token-only panel does.
+  const query = !password && token ? `?token=${encodeURIComponent(token)}` : '';
+  const url = `http://${displayHost}:${actualPort}/${query}`;
 
   return {
     server,
     store,
     runner,
+    auth,
     host,
     port: actualPort,
     token,
+    passwordProtected: Boolean(password),
     url,
     close: async () => {
       await runner.stop().catch(() => undefined);

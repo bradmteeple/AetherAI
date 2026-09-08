@@ -72,12 +72,36 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
   .toast.err { border-color: var(--err); color: #ffd7d7; }
   .toast.show { display: block; }
   .hint { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+  .gate { position: fixed; inset: 0; display: grid; place-items: center; padding: 20px; background: var(--bg); z-index: 10; }
+  .gate-card { width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 26px; }
+  .gate-card h1 { font-size: 19px; margin: 0 0 6px; }
+  .gate-card p.sub { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
+  .gate-card button { width: 100%; margin-top: 14px; }
+  .gate-error { color: var(--err); font-size: 13px; margin: 12px 0 0; min-height: 18px; }
+  header .bar { display: flex; align-items: baseline; gap: 12px; }
+  header .bar .spacer { flex: 1; }
   @media (max-width: 760px) { main { grid-template-columns: 1fr; } .grid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
+<div class="gate" id="gate" hidden>
+  <form class="gate-card" id="loginForm">
+    <h1>AetherAI control</h1>
+    <p class="sub">Sign in to turn the bot on or off.</p>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required />
+    <button type="submit" class="primary">Sign in</button>
+    <p class="gate-error" id="loginError"></p>
+  </form>
+</div>
+<div id="app" hidden>
 <header>
-  <h1>AetherAI control</h1>
+  <div class="bar">
+    <h1>AetherAI control</h1>
+    <span class="spacer"></span>
+    <button type="button" id="btnLogout" hidden>Sign out</button>
+  </div>
   <p id="formatName">Pokémon Showdown connector</p>
 </header>
 <main>
@@ -150,6 +174,7 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
     <pre id="log">waiting for the bot…</pre>
   </section>
 </main>
+</div>
 <div class="toast" id="toast"></div>
 <script>
 (function () {
@@ -168,10 +193,45 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
       body: options.body ? JSON.stringify(options.body) : undefined
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (data) {
-        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        if (!res.ok) {
+          var err = new Error(data.error || ('HTTP ' + res.status));
+          err.status = res.status;
+          err.needsPassword = !!data.needsPassword;
+          throw err;
+        }
         return data;
       });
     });
+  }
+
+  var authed = false;
+
+  function showGate(message) {
+    authed = false;
+    document.getElementById('gate').hidden = false;
+    document.getElementById('app').hidden = true;
+    document.getElementById('loginError').textContent = message || '';
+    var field = document.getElementById('password');
+    field.value = '';
+    field.focus();
+  }
+
+  function showApp(needsPassword) {
+    authed = true;
+    document.getElementById('gate').hidden = true;
+    document.getElementById('app').hidden = false;
+    document.getElementById('btnLogout').hidden = !needsPassword;
+    refresh();
+    pollLogs();
+  }
+
+  /** Any 401 while signed in means the session lapsed: back to the login screen. */
+  function handle(err) {
+    if (err && err.status === 401 && err.needsPassword) {
+      showGate('Your session expired — sign in again.');
+      return;
+    }
+    toast(err.message, true);
   }
 
   var toastTimer;
@@ -261,7 +321,7 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
         if (!confirm('Remove ' + a.username + '?')) return;
         api('/accounts/delete', { method: 'POST', body: { id: a.id } })
           .then(function () { toast(a.username + ' removed'); return refresh(); })
-          .catch(function (err) { toast(err.message, true); });
+          .catch(handle);
       };
       li.appendChild(del);
       list.appendChild(li);
@@ -287,7 +347,7 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
   function setActive(id) {
     api('/accounts/active', { method: 'POST', body: { id: id } })
       .then(function () { toast('Account switched'); return refresh(); })
-      .catch(function (err) { toast(err.message, true); refresh(); });
+      .catch(function (err) { handle(err); refresh(); });
   }
 
   function power(on) {
@@ -295,11 +355,12 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
     refresh();
     api('/power', { method: 'POST', body: { on: on } })
       .then(function () { toast(on ? 'Bot turned on' : 'Bot turned off'); })
-      .catch(function (err) { toast(err.message, true); })
+      .catch(handle)
       .then(function () { busy = false; return refresh(); });
   }
 
   function refresh() {
+    if (!authed) return Promise.resolve();
     return api('/config').then(function (data) {
       renderStatus(data.status);
       var botOff = data.status.status === 'off' || data.status.status === 'error';
@@ -307,10 +368,11 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
       renderSettings(data.settings);
       text('formatName', data.format.name + '  ·  ' + data.format.id);
       document.title = 'AetherAI — ' + data.status.status;
-    }).catch(function (err) { toast(err.message, true); });
+    }).catch(handle);
   }
 
   function pollLogs() {
+    if (!authed) return;
     api('/logs?after=' + logSeq).then(function (data) {
       if (!data.lines.length) return;
       logSeq = data.latest;
@@ -339,7 +401,7 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
         toast('Saved ' + username);
         return refresh();
       })
-      .catch(function (err) { toast(err.message, true); });
+      .catch(handle);
   };
 
   FIELDS.concat(CHECKS).forEach(function (id) {
@@ -354,11 +416,33 @@ export const CONTROL_PAGE_HTML = `<!doctype html>
         toast(data.applied ? 'Settings saved' : 'Saved — they apply the next time the bot is turned on');
         return refresh();
       })
-      .catch(function (err) { toast(err.message, true); });
+      .catch(handle);
   };
 
-  refresh();
-  pollLogs();
+  document.getElementById('loginForm').onsubmit = function (event) {
+    event.preventDefault();
+    var button = event.target.querySelector('button');
+    button.disabled = true;
+    api('/login', { method: 'POST', body: { password: document.getElementById('password').value } })
+      .then(function () { document.getElementById('loginError').textContent = ''; showApp(true); })
+      .catch(function (err) { document.getElementById('loginError').textContent = err.message; })
+      .then(function () { button.disabled = false; });
+  };
+
+  document.getElementById('btnLogout').onclick = function () {
+    api('/logout', { method: 'POST' })
+      .catch(function () { /* the cookie is gone either way */ })
+      .then(function () { showGate('Signed out.'); });
+  };
+
+  api('/session')
+    .then(function (session) {
+      if (session.authenticated) return showApp(session.needsPassword);
+      showGate(session.needsPassword ? '' : 'This panel is protected by a token — open it with the ?token=… link printed at startup.');
+      document.getElementById('password').disabled = !session.needsPassword;
+    })
+    .catch(function (err) { showGate(err.message); });
+
   setInterval(refresh, 2000);
   setInterval(pollLogs, 1500);
 })();
