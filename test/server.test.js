@@ -275,3 +275,18 @@ test('the LAN address is a real address or nothing', () => {
     assert.ok(!lan.startsWith('127.'), 'loopback is not a LAN address');
   }
 });
+
+test('the Codespaces container is configured to actually serve the site', () => {
+  const raw = readFileSync(join(__dirname, '..', '.devcontainer', 'devcontainer.json'), 'utf8');
+  const config = JSON.parse(raw.replace(/^\s*\/\/.*$/gm, ''));   // JSONC: strip line comments
+
+  assert.equal(config.postCreateCommand, 'npm run setup', 'the engine must be built on creation');
+  assert.deepEqual(config.forwardPorts, [3000]);
+  assert.equal(config.portsAttributes['3000'].label, 'AetherAI');
+
+  // The forwarded port only works if the server listens on every interface.
+  const start = config.postAttachCommand.server;
+  assert.match(start, /HOST=0\.0\.0\.0/, 'binding to loopback would not be reachable through the port forward');
+  assert.match(start, /server\/index\.js/);
+  assert.match(String(config.image), /node/);
+});

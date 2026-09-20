@@ -1,0 +1,33 @@
+{
+  "name": "AetherAI",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+
+  // Builds the vendored Showdown engine once, when the Codespace is created.
+  // Takes a couple of minutes; everything after that is instant.
+  "postCreateCommand": "npm run setup",
+
+  // Starts the site as soon as you attach, so the port is already up.
+  "postAttachCommand": {
+    "server": "HOST=0.0.0.0 nohup node server/index.js > /tmp/aetherai.log 2>&1 & sleep 2; echo 'AetherAI is running — open the forwarded port 3000 (Ports panel).'"
+  },
+
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "AetherAI",
+      "onAutoForward": "openPreview"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint"]
+    }
+  },
+
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "8gb",
+    "storage": "32gb"
+  }
+}

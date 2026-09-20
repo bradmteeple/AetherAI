@@ -14,11 +14,42 @@ npm start          # http://127.0.0.1:3000
 The site is a server, not a folder of static files — the battle engine runs
 inside it — so it needs something that runs Node. Three ways in, cheapest first:
 
-| | Command | Who can reach it |
+| | How | Who can reach it |
 |---|---|---|
+| **Through GitHub** | [Open a Codespace](https://codespaces.new/bradmteeple/AetherAI) | you, at a `*.app.github.dev` URL — or anyone, if you set the port public |
 | This machine | `npm start` | just you, at `http://127.0.0.1:3000` |
 | Your phone, same wifi | `npm run lan` | anything on your network, at the `http://192.168.x.x:3000` it prints |
-| Anywhere | `npm run share` | anyone with the link |
+| Anywhere, from your machine | `npm run share` | anyone with the link |
+
+#### A URL through GitHub (Codespaces)
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/bradmteeple/AetherAI)
+
+GitHub runs the site for you — no other account, nothing installed locally.
+`.devcontainer/devcontainer.json` builds the engine on creation and starts the
+server when you attach, so the Codespace comes up with port 3000 already
+serving and opens a preview. The address looks like
+`https://<codespace-name>-3000.app.github.dev`.
+
+That port is private to you by default. To hand the link to someone else, open
+the **Ports** panel, right-click port 3000 and set **Port Visibility → Public**.
+
+The limits worth knowing: a Codespace stops itself after 30 minutes idle and
+the URL stops with it (restarting gives the same address back), and the free
+plan includes 60 core-hours a month on the 2-core machine this asks for.
+
+#### Why GitHub Pages cannot host it
+
+Pages serves static files. This site is a server: the dex, the team validator
+and the battle engine all run in Node. Bundling the engine for a browser is not
+a small fix — the Dex loads its data through a computed `require(filePath)`,
+and `sim/` and `lib/` reach for `fs` and `path` throughout. Pointing esbuild at
+it produces **759 resolution errors**, which is why a browser-ready fork of the
+simulator exists as a separate project rather than a build flag.
+
+Pages could host the *pages* while the engine ran elsewhere — a permanent
+bookmark in front of a Codespace or `npm run share` link — but on its own it
+cannot run a battle.
 
 `npm run share` opens a **Cloudflare Quick Tunnel** — no account, no signup, no
 card — and prints something like:
@@ -72,6 +103,7 @@ server/battles.js      live sessions; best-of-three is ours, the single game is 
 server/sample-teams.js two ready-made teams, validated per format before being offered
 server/index.js        node:http server — static pages plus the JSON API
 scripts/share.js       `npm run share` — the site on a public Cloudflare Quick Tunnel link
+.devcontainer/         Codespaces: builds the engine, starts the site, forwards port 3000
 public/assets/targeting.js   doubles targeting, ported from the engine and shared with the tests
 public/                the three pages; no framework, no build step, no CDN
 test/                  node:test coverage of formats, both stat systems, targeting and full battles
