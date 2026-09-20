@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Battle · AetherAI</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="/assets/aether.css" />
+<link rel="stylesheet" href="/assets/battle.css" />
+</head>
+<body>
+<header class="site-head">
+  <div class="wrap">
+    <a class="mark" href="/"><span class="a">Aether</span><b>AI</b></a>
+    <nav class="nav">
+      <a href="/">Home</a>
+      <a href="/teams">Team Builder</a>
+      <a href="/battle" aria-current="page">Battle</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap battle-page">
+  <section id="setup" class="setup">
+    <div class="setup-head">
+      <p class="eyebrow">Battle</p>
+      <h1>Challenge AetherAI</h1>
+      <p class="lede">Pick a format and a team. Every turn is resolved by the vendored Showdown engine — the same damage rolls, speed ties and switch logic as a real game.</p>
+    </div>
+    <div class="panel setup-card">
+      <div class="panel-body">
+        <div class="setup-grid">
+          <label class="field"><span>Format</span><select id="format"></select></label>
+          <label class="field"><span>Your team</span><select id="teamSource"></select></label>
+        </div>
+        <div id="teamNote" class="team-note"></div>
+        <div id="setupError"></div>
+        <button id="start" class="gold btn-lg">Start battle</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="arena" hidden>
+    <div class="arena-head">
+      <span class="chip chip-gold" id="formatChip">—</span>
+      <span class="chip" id="turnChip">Turn 1</span>
+      <span class="chip" id="gameChip" hidden>Game 1</span>
+      <span class="chip" id="scoreChip" hidden>0 – 0</span>
+      <span class="spacer"></span>
+      <button class="btn-sm" id="forfeit">Leave battle</button>
+    </div>
+
+    <div class="field-view">
+      <div class="side side-foe">
+        <div class="side-label">AetherAI</div>
+        <div id="foeActive" class="slots"></div>
+        <div id="foeTeam" class="team-dots"></div>
+      </div>
+      <div class="versus">vs</div>
+      <div class="side side-you">
+        <div class="side-label" id="youLabel">You</div>
+        <div id="youActive" class="slots"></div>
+        <div id="youTeam" class="team-dots"></div>
+      </div>
+    </div>
+
+    <div id="banner" hidden></div>
+
+    <div class="play">
+      <div class="panel actions-panel">
+        <div class="panel-head"><h2 id="actionTitle">Your move</h2></div>
+        <div class="panel-body" id="actions"></div>
+      </div>
+      <div class="panel log-panel">
+        <div class="panel-head"><h2>Battle log</h2></div>
+        <div class="panel-body log" id="log"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap"><span>AetherAI</span><span class="spacer"></span><span>Battles run on the vendored Showdown engine</span></div>
+</footer>
+
+<script type="module" src="/assets/battle.js"></script>
+</body>
+</html>

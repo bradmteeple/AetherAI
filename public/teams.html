@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Team Builder · AetherAI</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="/assets/aether.css" />
+<link rel="stylesheet" href="/assets/teams.css" />
+</head>
+<body>
+<header class="site-head">
+  <div class="wrap">
+    <a class="mark" href="/"><span class="a">Aether</span><b>AI</b></a>
+    <nav class="nav">
+      <a href="/">Home</a>
+      <a href="/teams" aria-current="page">Team Builder</a>
+      <a href="/battle">Battle</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap builder">
+  <div class="builder-head">
+    <div>
+      <p class="eyebrow">Team Builder · VGC</p>
+      <h1>Build a legal team</h1>
+      <p class="hint" id="formatNote"></p>
+    </div>
+    <div class="builder-controls">
+      <label class="field"><span>Format</span><select id="format"></select></label>
+      <label class="field"><span>Team name</span><input id="teamName" placeholder="Untitled team" maxlength="40" /></label>
+      <button id="validate" class="gold">Validate</button>
+    </div>
+  </div>
+
+  <div id="verdict"></div>
+
+  <section class="roster" id="roster"></section>
+
+  <div class="columns">
+    <section class="panel picker">
+      <div class="panel-head">
+        <h2>Pokémon</h2>
+        <span class="spacer"></span>
+        <span class="chip" id="pickerCount">—</span>
+      </div>
+      <div class="picker-search"><input id="search" placeholder="Search by name or type…" autocomplete="off" /></div>
+      <div class="picker-list" id="speciesList"></div>
+    </section>
+
+    <section class="panel editor" id="editorPanel">
+      <div class="panel-head">
+        <h2 id="editorTitle">Slot</h2>
+        <span class="spacer"></span>
+        <button class="btn-sm" id="clearSlot">Clear slot</button>
+      </div>
+      <div class="panel-body" id="editor"></div>
+    </section>
+  </div>
+
+  <section class="panel paste-panel">
+    <div class="panel-head">
+      <h2>Showdown paste</h2>
+      <span class="spacer"></span>
+      <button class="btn-sm" id="importBtn">Import</button>
+      <button class="btn-sm" id="copyBtn">Copy</button>
+      <button class="btn-sm" id="saveBtn">Save team</button>
+      <button class="btn-sm gold" id="battleBtn">Use in battle</button>
+    </div>
+    <div class="panel-body">
+      <textarea id="paste" rows="10" spellcheck="false" placeholder="Paste a Showdown team here and press Import, or build one above."></textarea>
+    </div>
+  </section>
+
+  <section class="panel saved-panel">
+    <div class="panel-head"><h2>Saved teams</h2><span class="spacer"></span><span class="chip" id="savedCount">0</span></div>
+    <div class="panel-body" id="saved"></div>
+  </section>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <span>AetherAI</span><span class="spacer"></span>
+    <span>Validation by Showdown's own TeamValidator</span>
+  </div>
+</footer>
+
+<script type="module" src="/assets/teams.js"></script>
+</body>
+</html>

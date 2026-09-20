@@ -1,0 +1,65 @@
+Incineroar @ Sitrus Berry
+Ability: Intimidate
+Level: 50
+Tera Type: Grass
+EVs: 20 HP / 12 Atk / 12 Def / 10 SpD / 12 Spe
+Adamant Nature
+- Fake Out
+- Flare Blitz
+- Parting Shot
+- Protect
+
+Dragonite @ Choice Scarf
+Ability: Multiscale
+Level: 50
+Tera Type: Normal
+EVs: 12 HP / 32 Atk / 10 Def / 12 Spe
+Adamant Nature
+- Dragon Claw
+- Ice Spinner
+- Tailwind
+- Protect
+
+Gholdengo @ Leftovers
+Ability: Good as Gold
+Level: 50
+Tera Type: Water
+EVs: 24 HP / 20 SpA / 12 SpD / 10 Spe
+Modest Nature
+- Make It Rain
+- Shadow Ball
+- Nasty Plot
+- Protect
+
+Garchomp @ Life Orb
+Ability: Rough Skin
+Level: 50
+Tera Type: Steel
+EVs: 12 HP / 24 Atk / 30 Spe
+Jolly Nature
+- Earthquake
+- Dragon Claw
+- Rock Slide
+- Protect
+
+Venusaur @ Focus Sash
+Ability: Chlorophyll
+Level: 50
+Tera Type: Water
+EVs: 24 HP / 20 SpA / 12 SpD / 10 Def
+Modest Nature
+- Sludge Bomb
+- Earth Power
+- Knock Off
+- Protect
+
+Kingambit @ Expert Belt
+Ability: Defiant
+Level: 50
+Tera Type: Fire
+EVs: 20 HP / 26 Atk / 12 Def / 8 SpD
+Adamant Nature
+- Sucker Punch
+- Iron Head
+- Brick Break
+- Throat Chop

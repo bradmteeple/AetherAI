@@ -1,5 +1,63 @@
 # AetherAI
 
+A VGC team builder and doubles battle simulator for Generation IX, running on
+the official Pokémon Showdown engine — vendored into this repository, so the
+dex, the learnsets, the validator and the battle engine are all local.
+
+```bash
+npm run setup      # build the vendored engine (once)
+npm start          # http://127.0.0.1:3000
+```
+
+### VGC only
+
+Eight formats, in two different rule systems:
+
+| | Classic regulations | Pokémon Champions |
+|---|---|---|
+| Formats | VGC 2025 Reg I, 2024 Reg G, 2023 Reg D, 2023 Reg C | VGC 2026 Reg M-B and M-C, each also as Bo3 |
+| Species | 911 | 347, Mega Evolutions included |
+| Spreads | EVs, 252 per stat, 510 total | **Stat Points**, 32 per stat, 66 total |
+
+Both are doubles, level 50, bring 4 of 6. The builder reads all of that from
+the format itself, so switching regulation re-scales the sliders, swaps the
+species and item pools, and re-clamps any spread the old rules allowed.
+
+| Page | What it does |
+|---|---|
+| `/` | Landing page. The counts on it are read from the engine at load, not typed in. |
+| `/teams` | Team builder: every species, ability, item and legal move for the regulation, with natures, spreads and Tera type. Validates through Showdown's own `TeamValidator`, imports and exports Showdown paste format, and saves teams in your browser. |
+| `/battle` | A doubles battle against AetherAI, resolved by Showdown's `BattleStream`: team preview, per-slot move targeting, Terastallization, and best-of-three sets played game after game with a running score. |
+
+Nothing is mocked: when the builder says Great Tusk can't learn Hydro Pump, or
+that a Champions stat stops at 32, that is the format's own rules talking.
+
+### Layout
+
+```
+server/showdown.js     formats, dex, learnsets and validation, straight from the engine
+server/battles.js      live sessions; best-of-three is ours, the single game is the engine's
+server/sample-teams.js two ready-made teams, validated per format before being offered
+server/index.js        node:http server — static pages plus the JSON API
+public/assets/targeting.js   doubles targeting, ported from the engine and shared with the tests
+public/                the three pages; no framework, no build step, no CDN
+test/                  node:test coverage of formats, both stat systems, targeting and full battles
+vendor/pokemon-showdown/     the engine itself (see below)
+```
+
+API: `GET /api/formats`, `GET /api/dex`, `GET /api/moves?species=`,
+`GET /api/movedex`, `GET /api/sampleteams?format=`, `POST /api/validate`,
+`POST /api/battle`, `POST /api/battle/:id/choose`.
+
+### Known limits
+
+* The opponent is Showdown's `RandomPlayerAI` — it plays legal moves, not good
+  ones — and it mirrors your team, so both sides bring the same six.
+* The 2023 regulations have no sample team; build one in the builder.
+* Best-of-three keeps the set score but does not carry Open Team Sheets or
+  between-game switching restrictions across games.
+* Battle sessions live in memory and expire after 30 minutes.
+
 ## Vendored: Pokémon Showdown
 
 The official [Pokémon Showdown](https://github.com/smogon/pokemon-showdown)

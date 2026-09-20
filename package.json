@@ -1,0 +1,13 @@
+{
+  "name": "aetherai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AetherAI — team builder and battle simulator built on the vendored Pokémon Showdown engine.",
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "setup": "cd vendor/pokemon-showdown && npm install && node build",
+    "start": "node server/index.js",
+    "test": "node --test test/*.test.js"
+  }
+}
