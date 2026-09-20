@@ -209,3 +209,69 @@ test('learnsets and the dex still come from the engine', () => {
   assert.ok(!moves.includes('Hydro Pump'));
   assert.ok(dex.dexFor(CLASSIC).moveCount > 500);
 });
+
+test('the site serves its pages and API over http', async () => {
+  const site = require('../server/index.js');
+  const { port } = await site.listen({ host: '127.0.0.1', port: 0 });
+  const base = `http://127.0.0.1:${port}`;
+  try {
+    for (const [path, needle] of [['/', 'AetherAI'], ['/teams', 'Team Builder'], ['/battle', 'Challenge AetherAI']]) {
+      const res = await fetch(base + path);
+      assert.equal(res.status, 200, `${path} should render`);
+      assert.match(res.headers.get('content-type'), /text\/html/);
+      assert.match(await res.text(), new RegExp(needle));
+    }
+
+    const formats = await (await fetch(`${base}/api/formats`)).json();
+    assert.ok(formats.formats.every((f) => f.gameType === 'doubles'));
+
+    const samples = await (await fetch(`${base}/api/sampleteams?format=${CLASSIC}`)).json();
+    assert.ok(samples.teams.length, 'Reg I should offer a sample team');
+
+    // A battle needs a legal team, and says so rather than failing obscurely.
+    const noTeam = await fetch(`${base}/api/battle`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ format: CLASSIC, paste: '' }),
+    });
+    assert.equal(noTeam.status, 400);
+    assert.match((await noTeam.json()).error, /needs a team/);
+
+    const illegal = await fetch(`${base}/api/battle`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ format: CHAMPIONS, paste: teamFile('classic-vgc.txt') }),
+    });
+    assert.equal(illegal.status, 400);
+    assert.ok((await illegal.json()).problems.length, 'the validator problems should come back');
+
+    const started = await (await fetch(`${base}/api/battle`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ format: CLASSIC, paste: samples.teams[0].paste }),
+    })).json();
+    assert.ok(started.id);
+    assert.equal(started.request.teamPreview, true);
+
+    assert.equal((await fetch(`${base}/api/nope`)).status, 404);
+  } finally {
+    await new Promise((done) => site.server.close(done));
+  }
+});
+
+test('the public link is read out of cloudflared s own output', () => {
+  const { parseTunnelUrl } = require('../scripts/share.js');
+  assert.equal(
+    parseTunnelUrl('2026-09-20T02:17:35Z INF |  https://neat-words-here.trycloudflare.com  |'),
+    'https://neat-words-here.trycloudflare.com'
+  );
+  assert.equal(parseTunnelUrl('INF Requesting new quick Tunnel on trycloudflare.com...'), null);
+  assert.equal(parseTunnelUrl('ERR Host not in allowlist: api.trycloudflare.com'), null);
+  assert.equal(parseTunnelUrl(''), null);
+});
+
+test('the LAN address is a real address or nothing', () => {
+  const { lanAddress } = require('../server/index.js');
+  const lan = lanAddress();
+  if (lan !== null) {
+    assert.match(lan, /^\d+\.\d+\.\d+\.\d+$/);
+    assert.ok(!lan.startsWith('127.'), 'loopback is not a LAN address');
+  }
+});

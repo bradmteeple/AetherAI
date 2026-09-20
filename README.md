@@ -9,6 +9,38 @@ npm run setup      # build the vendored engine (once)
 npm start          # http://127.0.0.1:3000
 ```
 
+### Reaching it
+
+The site is a server, not a folder of static files — the battle engine runs
+inside it — so it needs something that runs Node. Three ways in, cheapest first:
+
+| | Command | Who can reach it |
+|---|---|---|
+| This machine | `npm start` | just you, at `http://127.0.0.1:3000` |
+| Your phone, same wifi | `npm run lan` | anything on your network, at the `http://192.168.x.x:3000` it prints |
+| Anywhere | `npm run share` | anyone with the link |
+
+`npm run share` opens a **Cloudflare Quick Tunnel** — no account, no signup, no
+card — and prints something like:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  Public link:  https://neat-words-here.trycloudflare.com │
+│  This machine: http://127.0.0.1:3000                     │
+│  This network: http://192.168.1.24:3000                  │
+└──────────────────────────────────────────────────────────┘
+```
+
+`cloudflared` is downloaded into `.aether/bin` the first time if you do not
+already have it. What you trade for the zero setup: the link lives only as long
+as the command runs, it is a different address next time, your machine has to
+stay awake, and **anyone with the link can use the site** — there is no login.
+Cloudflare gives account-less tunnels no uptime guarantee either.
+
+For an address that stays put, deploy it to anything that runs Node
+continuously (Fly, Render, Railway, a VPS). That needs an account somewhere;
+the tunnel does not.
+
 ### VGC only
 
 Eight formats, in two different rule systems:
@@ -39,6 +71,7 @@ server/showdown.js     formats, dex, learnsets and validation, straight from the
 server/battles.js      live sessions; best-of-three is ours, the single game is the engine's
 server/sample-teams.js two ready-made teams, validated per format before being offered
 server/index.js        node:http server — static pages plus the JSON API
+scripts/share.js       `npm run share` — the site on a public Cloudflare Quick Tunnel link
 public/assets/targeting.js   doubles targeting, ported from the engine and shared with the tests
 public/                the three pages; no framework, no build step, no CDN
 test/                  node:test coverage of formats, both stat systems, targeting and full battles
@@ -57,6 +90,8 @@ API: `GET /api/formats`, `GET /api/dex`, `GET /api/moves?species=`,
 * Best-of-three keeps the set score but does not carry Open Team Sheets or
   between-game switching restrictions across games.
 * Battle sessions live in memory and expire after 30 minutes.
+* There is no login: anyone who can reach the site can use it. Fine on your own
+  machine or wifi; worth remembering before you hand the public link around.
 
 ## Vendored: Pokémon Showdown
 

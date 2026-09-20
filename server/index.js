@@ -6,6 +6,7 @@
  */
 const { createServer } = require('node:http');
 const { createReadStream, existsSync, statSync } = require('node:fs');
+const { networkInterfaces } = require('node:os');
 const { extname, join, normalize } = require('node:path');
 const dex = require('./showdown');
 const battles = require('./battles');
@@ -155,10 +156,43 @@ const server = createServer((req, res) => {
   });
 });
 
-if (require.main === module) {
-  server.listen(PORT, HOST, () => {
-    console.log(`AetherAI running at http://${HOST}:${PORT}`);
+/** This machine's address on the local network, for opening the site on a phone. */
+function lanAddress() {
+  for (const addresses of Object.values(networkInterfaces())) {
+    for (const address of addresses || []) {
+      if (address.family === 'IPv4' && !address.internal) return address.address;
+    }
+  }
+  return null;
+}
+
+function listen({ host = HOST, port = PORT } = {}) {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, host, () => {
+      server.off('error', reject);
+      resolve({ host, port: server.address().port });
+    });
   });
 }
 
-module.exports = { server };
+if (require.main === module) {
+  listen().then(({ host, port }) => {
+    console.log(`AetherAI running at http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`);
+    if (host === '0.0.0.0') {
+      const lan = lanAddress();
+      if (lan) console.log(`On this network:       http://${lan}:${port}`);
+    } else {
+      console.log('Only this machine can reach it. For your phone or another computer:');
+      console.log(`  HOST=0.0.0.0 npm start        (same wifi)`);
+      console.log(`  npm run share                 (a public https link, no account)`);
+    }
+  }).catch((err) => {
+    console.error(err.code === 'EADDRINUSE'
+      ? `Port ${PORT} is already in use. Try: PORT=3001 npm start`
+      : err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { server, listen, lanAddress, PORT, HOST };
