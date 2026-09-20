@@ -1,5 +1,46 @@
 # AetherAI
 
+A team builder and battle simulator for Generation IX Pokémon, running on the
+official Pokémon Showdown engine — vendored into this repository, so the dex,
+the learnsets, the validator and the battle engine are all local.
+
+```bash
+npm run setup      # build the vendored engine (once)
+npm start          # http://127.0.0.1:3000
+```
+
+| Page | What it does |
+|---|---|
+| `/` | Landing page. The counts on it are read from the engine at load, not typed in. |
+| `/teams` | Team builder: every species, ability, item and legal move, with natures, EVs, Tera type and live stat maths. Validates through Showdown's own `TeamValidator`, imports and exports Showdown paste format, and saves teams in your browser. |
+| `/battle` | A full battle against AetherAI, resolved by Showdown's `BattleStream`. Real damage rolls, turn order, switching, status and Terastallization. |
+
+Nothing is mocked: when the builder says Great Tusk can't learn Hydro Pump,
+that is the cartridge's learnset saying so.
+
+### Layout
+
+```
+server/showdown.js   dex, learnsets and validation, straight from the engine
+server/battles.js    live battle sessions (you are p1; p2 is Showdown's RandomPlayerAI)
+server/index.js      node:http server — static pages plus the JSON API
+public/              the three pages; no framework, no build step, no CDN
+test/                node:test coverage of the dex, validation and a full battle
+vendor/pokemon-showdown/   the engine itself (see below)
+```
+
+The API, if you want to drive it yourself: `GET /api/formats`, `GET /api/dex`,
+`GET /api/moves?species=`, `GET /api/movedex`, `POST /api/validate`,
+`POST /api/battle`, `POST /api/battle/:id/choose`.
+
+### Known limits
+
+* Battles are **singles only**. Doubles and VGC formats are offered in the
+  builder but not the battle page, which has no per-slot targeting UI yet.
+* The opponent is Showdown's `RandomPlayerAI` — it plays legal moves, not good
+  ones.
+* Battle sessions live in memory and expire after 30 minutes.
+
 ## Vendored: Pokémon Showdown
 
 The official [Pokémon Showdown](https://github.com/smogon/pokemon-showdown)
