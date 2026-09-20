@@ -44,6 +44,8 @@
     <div class="arena-head">
       <span class="chip chip-gold" id="formatChip">—</span>
       <span class="chip" id="turnChip">Turn 1</span>
+      <span class="chip" id="gameChip" hidden>Game 1</span>
+      <span class="chip" id="scoreChip" hidden>0 – 0</span>
       <span class="spacer"></span>
       <button class="btn-sm" id="forfeit">Leave battle</button>
     </div>
@@ -51,13 +53,13 @@
     <div class="field-view">
       <div class="side side-foe">
         <div class="side-label">AetherAI</div>
-        <div id="foeActive" class="active-mon"></div>
+        <div id="foeActive" class="slots"></div>
         <div id="foeTeam" class="team-dots"></div>
       </div>
       <div class="versus">vs</div>
       <div class="side side-you">
         <div class="side-label" id="youLabel">You</div>
-        <div id="youActive" class="active-mon"></div>
+        <div id="youActive" class="slots"></div>
         <div id="youTeam" class="team-dots"></div>
       </div>
     </div>

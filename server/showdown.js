@@ -18,29 +18,63 @@ if (!existsSync(DIST)) {
 
 const { Dex, Teams, TeamValidator } = require(DIST);
 
-/** Formats worth offering: real, playable, current-generation singles and doubles. */
+/**
+ * VGC only. Two rule systems live here: the classic regulations (EVs, 252 per
+ * stat) and Pokémon Champions (Stat Points, 32 per stat, its own species and
+ * item pools). Both are doubles, level 50, bring 4 of 6.
+ */
 const FORMAT_ALLOWLIST = [
-  'gen9ou', 'gen9ubers', 'gen9uu', 'gen9ru', 'gen9nu', 'gen9pu', 'gen9lc',
-  'gen9monotype', 'gen9nationaldex', 'gen9doublesou', 'gen9vgc2025regi', 'gen9doublesuu',
-  'gen9randombattle', 'gen9randomdoublesbattle',
+  'gen9championsvgc2026regmc',
+  'gen9championsvgc2026regmcbo3',
+  'gen9championsvgc2026regmb',
+  'gen9championsvgc2026regmbbo3',
+  'gen9vgc2025regi',
+  'gen9vgc2024regg',
+  'gen9vgc2023regd',
+  'gen9vgc2023regc',
 ];
 
+/** Champions counts Stat Points, not EVs — a different cap and a different name. */
+function statRules(dex, ruleTable) {
+  const statPoints = dex.currentMod.startsWith('champions');
+  return statPoints
+    ? { label: 'Stat Points', short: 'SP', perStat: 32, total: ruleTable.evLimit ?? 66, statPoints: true }
+    : { label: 'EVs', short: 'EVs', perStat: 252, total: ruleTable.evLimit ?? 510, statPoints: false };
+}
+
+function displayName(format) {
+  if (format.name.startsWith('[Gen 9 Champions]')) return `Champions ${format.name.replace('[Gen 9 Champions] ', '')}`;
+  return format.name.replace(/^\[Gen \d+\]\s*/, '');
+}
+
+let formatCache = null;
+
 function formats() {
+  if (formatCache) return formatCache;
   const out = [];
   for (const id of FORMAT_ALLOWLIST) {
     const format = Dex.formats.get(id);
     if (!format.exists) continue;
+    const ruleTable = Dex.formats.getRuleTable(format);
+    const dex = Dex.forFormat(format);
     out.push({
       id: format.id,
-      name: format.name.replace(/^\[Gen \d+\]\s*/, ''),
+      name: displayName(format),
       fullName: format.name,
       gameType: format.gameType,
-      teamSize: format.teamLength?.battle ?? (format.gameType === 'doubles' ? 4 : 6),
-      random: Boolean(format.team),
+      champions: dex.currentMod.startsWith('champions'),
+      bring: ruleTable.pickedTeamSize ?? 4,
+      teamSize: 6,
+      level: ruleTable.adjustLevel ?? 50,
+      bestOf: /bo3$/.test(format.id) ? 3 : 0,
+      stats: statRules(dex, ruleTable),
     });
   }
+  formatCache = out;
   return out;
 }
+
+const formatById = (id) => formats().find((f) => f.id === id) || null;
 
 const dexCache = new Map();
 
@@ -74,7 +108,15 @@ function dexFor(formatId) {
   })).sort((a, b) => a.name.localeCompare(b.name));
 
   const moveCount = dex.moves.all().filter((m) => m.exists && !m.isNonstandard).length;
-  const payload = { formatId, species, items, natures, types: dex.types.names(), moveCount };
+  const payload = {
+    formatId,
+    species,
+    items,
+    natures,
+    types: dex.types.names(),
+    moveCount,
+    format: formatById(formatId),
+  };
   dexCache.set(formatId, payload);
   return payload;
 }
@@ -162,4 +204,4 @@ function validate(formatId, paste) {
   return { ok: !problems, problems: problems || [], count: team.length };
 }
 
-module.exports = { Dex, Teams, TeamValidator, formats, dexFor, movesFor, moveDex, validate, VENDOR, DIST };
+module.exports = { Dex, Teams, TeamValidator, formats, formatById, dexFor, movesFor, moveDex, validate, VENDOR, DIST };

@@ -1,10 +1,9 @@
 import { el, $, setKids, api, typeClass, loadTeams, saveTeams, toast } from '/assets/common.js';
 
 const STATS = [['hp', 'HP'], ['atk', 'Atk'], ['def', 'Def'], ['spa', 'SpA'], ['spd', 'SpD'], ['spe', 'Spe']];
-const EV_CAP = 508;
 
 const state = {
-  format: 'gen9ou',
+  format: 'gen9vgc2025regi',
   dex: null,
   formats: [],
   slots: Array.from({ length: 6 }, () => null),
@@ -18,13 +17,15 @@ const emptySet = (species) => ({
   item: '',
   ability: species.abilities[0] || '',
   teraType: species.types[0] || 'Normal',
-  level: 100,
+  level: rules().level,
   nature: 'Hardy',
   evs: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
   moves: ['', '', '', ''],
 });
 
 const speciesById = (id) => state.dex.species.find((s) => s.id === id);
+const rules = () => state.dex?.format || { level: 50, bring: 4, teamSize: 6, stats: { label: 'EVs', perStat: 252, total: 510, statPoints: false } };
+const statRules = () => rules().stats;
 
 /* ---------- Showdown paste format ---------- */
 
@@ -171,12 +172,13 @@ async function renderEditor() {
 
   const refreshStats = () => {
     statsHost.replaceChildren(statBars(species, set));
+    const cap = statRules().total;
     const total = STATS.reduce((sum, [k]) => sum + set.evs[k], 0);
-    evTotalNode.className = `ev-total ${total > EV_CAP ? 'over' : ''}`;
+    evTotalNode.className = `ev-total ${total > cap ? 'over' : ''}`;
     setKids(evTotalNode,
       el('span', { text: 'Spent' }),
-      el('b', { text: `${total} / ${EV_CAP}` }),
-      total > EV_CAP ? el('span', { style: 'color:var(--bad)', text: 'over the limit' }) : null);
+      el('b', { text: `${total} / ${cap}` }),
+      total > cap ? el('span', { style: 'color:var(--bad)', text: 'over the limit' }) : null);
   };
 
   const refreshMoveHint = (slot) => {
@@ -232,13 +234,13 @@ async function renderEditor() {
     ),
     el('div', { class: 'grid-2' },
       el('div', {},
-        el('span', { class: 'eyebrow', style: 'display:block;margin-bottom:10px', text: 'EVs' }),
+        el('span', { class: 'eyebrow', style: 'display:block;margin-bottom:10px', text: statRules().label }),
         el('div', { class: 'evs' }, ...STATS.map(([key, label]) => {
           const output = el('output', { text: set.evs[key] });
           return el('div', { class: 'ev-row' },
             el('label', { text: label }),
             el('input', {
-              type: 'range', min: '0', max: '252', step: '4', value: set.evs[key],
+              type: 'range', min: '0', max: String(statRules().perStat), step: statRules().statPoints ? '1' : '4', value: set.evs[key],
               oninput: (e) => {
                 set.evs[key] = Number(e.target.value);
                 output.textContent = set.evs[key];
@@ -333,12 +335,33 @@ function renderSaved() {
 async function loadDex() {
   state.dex = await api(`/api/dex?format=${encodeURIComponent(state.format)}`);
   state.moveCache.clear();
+  clampToRules();
   renderSpeciesList();
+  renderFormatNote();
+}
+
+/** Champions caps a stat at 32; carrying a 252 spread across would be illegal. */
+function clampToRules() {
+  const { perStat } = statRules();
+  for (const set of state.slots) {
+    if (!set) continue;
+    for (const [key] of STATS) set.evs[key] = Math.min(set.evs[key], perStat);
+    set.level = rules().level;
+  }
+  syncPaste();
+}
+
+function renderFormatNote() {
+  const r = rules();
+  const note = $('#formatNote');
+  if (!note) return;
+  note.textContent = `Doubles · level ${r.level} · bring ${r.bring} of ${r.teamSize} · ${r.stats.label} capped at ${r.stats.perStat} per stat, ${r.stats.total} total`;
 }
 
 async function main() {
   const { formats } = await api('/api/formats');
-  state.formats = formats.filter((f) => !f.random);
+  state.formats = formats;
+  state.format = formats[0]?.id ?? state.format;
   $('#format').replaceChildren(...state.formats.map((f) =>
     el('option', { value: f.id, text: f.name, selected: f.id === state.format })));
 

@@ -67,12 +67,12 @@
 
 <main class="wrap">
   <section class="hero">
-    <p class="eyebrow">Pokémon · Generation IX</p>
+    <p class="eyebrow">Pokémon VGC · Generation IX</p>
     <h1>AetherAI</h1>
     <p class="tagline">You are challenged by AetherAI</p>
     <p class="lede">
-      Build a team against the real cartridge rules, then take it into a live battle —
-      both running on the official Pokémon Showdown engine, locally, on your machine.
+      A VGC team builder and doubles battle simulator — the current regulations and
+      Pokémon Champions, both running on the official Showdown engine, locally.
     </p>
     <div class="actions">
       <a class="btn btn-gold btn-lg" href="/teams">Build a team</a>
@@ -86,13 +86,13 @@
     <article class="panel card">
       <span class="num">01</span>
       <h3>Team Builder</h3>
-      <p>Every species, ability, item and legal move in the generation. Set natures, EVs and Tera type, then validate against the same rules the ladder enforces — illegal sets are caught before you ever click battle.</p>
+      <p>Every species, ability, item and legal move for the regulation you pick. Set natures, spreads and Tera type — the builder follows each format's own rules, including Champions' 32-point Stat Points — then validates against the real thing.</p>
       <a class="go" href="/teams">Open the builder →</a>
     </article>
     <article class="panel card">
       <span class="num">02</span>
       <h3>Battle</h3>
-      <p>Take a saved team, or a random one, into a full battle against AetherAI. Real damage rolls, real turn order, real switching — the simulator resolves every turn exactly as the live server would.</p>
+      <p>Bring four of six into a doubles battle against AetherAI, with proper move targeting, Terastallization and best-of-three sets. Every turn is resolved by the simulator exactly as the live server would.</p>
       <a class="go" href="/battle">Enter a battle →</a>
     </article>
     <article class="panel card">
@@ -104,10 +104,10 @@
   </section>
 
   <section class="stats">
-    <div class="stat"><b id="statSpecies">—</b><span>Species</span></div>
+    <div class="stat"><b id="statSpecies">—</b><span>Species · Reg I</span></div>
     <div class="stat"><b id="statMoves">—</b><span>Moves</span></div>
     <div class="stat"><b id="statItems">—</b><span>Items</span></div>
-    <div class="stat"><b id="statFormats">—</b><span>Formats</span></div>
+    <div class="stat"><b id="statFormats">—</b><span>VGC formats</span></div>
   </section>
 
   <section class="engine">
@@ -148,7 +148,7 @@
   import { api, $ } from '/assets/common.js';
   const n = (v) => v.toLocaleString();
   try {
-    const [dex, formats] = await Promise.all([api('/api/dex?format=gen9nationaldex'), api('/api/formats')]);
+    const [dex, formats] = await Promise.all([api('/api/dex?format=gen9vgc2025regi'), api('/api/formats')]);
     $('#statSpecies').textContent = n(dex.species.length);
     $('#statMoves').textContent = n(dex.moveCount);
     $('#statItems').textContent = n(dex.items.length);

@@ -9,6 +9,7 @@ const { createReadStream, existsSync, statSync } = require('node:fs');
 const { extname, join, normalize } = require('node:path');
 const dex = require('./showdown');
 const battles = require('./battles');
+const { samplesFor } = require('./sample-teams');
 
 const PUBLIC_DIR = join(__dirname, '..', 'public');
 const PORT = Number(process.env.PORT ?? 3000);
@@ -82,6 +83,11 @@ async function api(req, res, url) {
 
   if (route === 'GET /api/movedex') return json(res, 200, { moves: dex.moveDex() });
 
+  if (route === 'GET /api/sampleteams') {
+    const format = url.searchParams.get('format') || '';
+    return json(res, 200, { teams: samplesFor(format) });
+  }
+
   if (route === 'GET /api/moves') {
     const species = url.searchParams.get('species');
     const format = url.searchParams.get('format') || 'gen9ou';
@@ -97,19 +103,18 @@ async function api(req, res, url) {
 
   if (route === 'POST /api/battle') {
     const body = await readJson(req);
-    const formatId = typeof body.format === 'string' ? body.format : 'gen9randombattle';
-    const format = dex.formats().find((f) => f.id === formatId);
+    const formatId = typeof body.format === 'string' ? body.format : '';
+    const format = dex.formatById(formatId);
     if (!format) return json(res, 400, { error: `Unknown format "${formatId}"` });
-    if (!format.random) {
-      if (typeof body.paste !== 'string' || !body.paste.trim()) {
-        return json(res, 400, { error: `${format.name} needs a team. Build one first, or pick a Random Battle format.` });
-      }
-      const check = dex.validate(formatId, body.paste);
-      if (!check.ok) return json(res, 400, { error: 'That team is not legal here.', problems: check.problems });
+    if (typeof body.paste !== 'string' || !body.paste.trim()) {
+      return json(res, 400, { error: `${format.name} needs a team. Build one in the team builder, or pick a sample team.` });
     }
+    const check = dex.validate(formatId, body.paste);
+    if (!check.ok) return json(res, 400, { error: 'That team is not legal here.', problems: check.problems });
     const session = await battles.create({
       formatId,
-      team: format.random ? null : body.paste,
+      team: body.paste,
+      bestOf: format.bestOf,
       playerName: typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 18) : 'You',
     });
     return json(res, 200, session.view(0));
